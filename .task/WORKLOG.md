@@ -13,12 +13,17 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-06-15 — README 기능 가이드 개편
+- 도구 성격을 "UniFLOW 구축·운영 개발자 편의 도구"로 재정의
+- 사용법 표 → 기능별(정의·용도·사용법) 항목으로 재구성
+- 커밋: (이번 작업)
+
 ### 2026-06-15 — 문서 역할 정리 + 작업 기록 체계(.task) 구성
 - CLAUDE.md에서 "미구현/향후 계획" 제거 → `.task/BACKLOG.md` 로 이관, CLAUDE.md는 Claude 작업용 컨텍스트로 한정
 - CLAUDE.md에 "작업 기록(필수)" 규칙 추가 — 작업 전 WORKLOG/BACKLOG 확인, 작업 후 WORKLOG 갱신
 - `.task/WORKLOG.md`·`.task/BACKLOG.md` 신설, `.task/README.md` 갱신
 - README.md를 도구 사용 가이드로 정리 (스크린샷·요소좌표맵 등 미구현 표현 제거)
-- 커밋: (이번 작업)
+- 커밋: ac6330c
 
 ### 2026-06-15 — CLAUDE.md 현행화
 - 파일 구조를 src/ 트리로 갱신, Google/OAuth 항목 제거
