@@ -1,0 +1,27 @@
+# OS 산출물
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 에디터 / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# 패키징 산출물 (Chrome 웹스토어 / 배포용 zip)
+dist/
+*.zip
+*.crx
+*.pem
+
+# 로그 / 임시
+*.log
+tmp/
+
+# 노드 (도구 도입 시)
+node_modules/
+
+# 로컬 비밀값 — 절대 커밋 금지 (서비스 계정 키 등)
+*.secret.json
+service-account*.json

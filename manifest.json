@@ -10,7 +10,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js", "userSwitch.js"],
+      "js": ["src/content/content.js", "src/content/userSwitch.js"],
       "run_at": "document_idle"
     }
   ],
@@ -20,7 +20,7 @@
     "128": "icons/icon_128x128.png"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup/popup.html",
     "default_title": "UniFLOW DevTool",
     "default_icon": {
       "16": "icons/icon_16x16.png",

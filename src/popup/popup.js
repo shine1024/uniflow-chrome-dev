@@ -324,7 +324,7 @@ document.getElementById('recordBtn').addEventListener('click', async () => {
     } catch {
       // content script가 아직 없을 수 있음 — inject
       await chrome.scripting.executeScript({
-        target: { tabId: tab.id }, files: ['content.js']
+        target: { tabId: tab.id }, files: ['src/content/content.js']
       });
       await chrome.tabs.sendMessage(tab.id, { action: 'startRecording' });
     }
