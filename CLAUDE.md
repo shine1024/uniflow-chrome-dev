@@ -6,6 +6,13 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 
 출력물을 Claude Code에 붙여넣으면 "이 화면의 어떤 파일을 어떻게 고쳐야 하는지" 바로 작업 가능하게 하는 것이 목표.
 
+## 작업 기록 (필수)
+이 프로젝트의 작업 현황·히스토리·향후 계획은 `.task/` 에서 관리한다.
+- **작업을 시작하기 전** `.task/WORKLOG.md`(시간순 작업 히스토리)와 `.task/BACKLOG.md`(미구현·향후 계획)를 먼저 확인한다.
+- **의미 있는 작업을 마치면**(기능 추가/변경, 구조 변경, 커밋 등) `.task/WORKLOG.md` 맨 위에 항목을 추가한다 — `날짜 · 한 일 · 관련 커밋`.
+- 새로 발견한 향후 과제는 `.task/BACKLOG.md` 에 추가한다.
+- 개별 작업의 상세 계획이 필요하면 `.task/NNN-제목.md` 로 만든다.
+
 ## 현재 상태 (v0.3)
 - ✅ **파일 추출**: script[src] + RequireJS 모듈(require.s.contexts._.defined, _.urlFetched) + CSS(link + @import) 추출
 - ✅ **접근경로 녹화**: 클릭 + input/change 이벤트 캡처 → 셀렉터 + 텍스트 라벨 + 입력값 기록
@@ -17,17 +24,6 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 - ✅ **CSS 중복 제거**: 쿼리스트링(?bust=...) 무시하고 경로 기준 dedup
 - ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM, 헤더 드래그로 이동) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js)
 - ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (설정 탭). 즐겨찾기도 도메인별 저장
-
-## 미구현 / 향후 계획
-- ❌ **JSP 파일 표식**: 서버 쪽에 meta 태그 또는 data 속성으로 JSP 경로를 주입해야 함
-  - 방안 A: `<meta name="jsp-source" content="<%=request.getServletPath()%>">` (공통 레이아웃에 1줄)
-  - 방안 B: `<div data-jsp-source="...">` (include 단위로 세밀한 표시, 복잡한 화면에 유리)
-  - 어느 쪽이든 dev 프로필에서만 활성화
-- ❌ **COMMON_PATTERNS 커스터마이징**: UniFLOW 디렉터리 구조에 맞게 필터 패턴 조정 필요
-- ❌ **녹화 데이터 → 자연어 변환**: Claude API 후처리로 셀렉터+텍스트를 자연어 문장으로
-- ❌ **data-main 속성**: 메인 JS 특정을 위한 `<script data-main="true">` 마킹 (서버 쪽)
-- ❌ **스크린샷 캡처**: 녹화 시점 화면 자동 캡처(captureVisibleTab) — 별도 Service Worker 필요(현재 백그라운드 없음). popup.js에 screenshot step 렌더 코드만 잔존
-- ❌ **요소 좌표맵**: 캡처 시점 interactive 요소 rect 수집(step type "elements_map") — 스크린샷과 함께 구현 예정
 
 ## 기술 스택
 - Chrome Extension Manifest V3
@@ -49,9 +45,11 @@ uniflow-devtool/
       popup.html            — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + 설정 탭)
       popup.js              — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + 도메인별 토큰 관리
   docs/                      — 설계 메모·아키텍처 노트
-  .task/                     — 작업 계획 파일
-  README.md                  — 설치·사용법·설정
-  CLAUDE.md                  — 이 파일 (프로젝트 컨텍스트)
+  .task/                     — 작업 기록/진행 관리
+    WORKLOG.md              — 시간순 작업 히스토리 (최신이 위)
+    BACKLOG.md              — 미구현·향후 계획
+  README.md                  — 도구 사용 가이드 (설치·사용법·설정)
+  CLAUDE.md                  — 이 파일 (Claude 작업용 프로젝트 컨텍스트)
 ```
 
 > 진입점 경로 규칙: manifest.json의 `content_scripts.js`/`default_popup` 와
