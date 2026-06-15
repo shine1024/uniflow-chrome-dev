@@ -265,7 +265,7 @@ function renderRecordResult(steps) {
     } else if (step.type === 'screenshot') {
       const thumb = step.imageData
         ? `<img class="screenshot-thumb" src="${step.imageData}" alt="screenshot">`
-        : (step.driveFileId ? `<img class="screenshot-thumb" src="https://drive.google.com/uc?id=${step.driveFileId}" alt="screenshot">` : '');
+        : '';
       html += `<li class="screenshot-step"><span class="tag tag-screenshot">화면</span>${shortenUrl(step.url)} ${thumb}</li>`;
     }
   });
@@ -380,61 +380,6 @@ async function updateRecordUI() {
   }
 }
 
-// ============================================================
-// Google 저장 기능
-// ============================================================
-
-// 스프레드시트 ID 로드/저장
-async function loadSheetId() {
-  const data = await chrome.storage.sync.get(['spreadsheetId']);
-  return data.spreadsheetId || '';
-}
-
-async function saveSheetId(id) {
-  await chrome.storage.sync.set({ spreadsheetId: id.trim() });
-}
-
-document.getElementById('sheetIdSaveBtn').addEventListener('click', async () => {
-  const id = document.getElementById('sheetIdInput').value.trim();
-  if (!id) return;
-  await saveSheetId(id);
-  document.getElementById('sheetIdInput').value = '';
-  document.getElementById('sheetIdInput').placeholder = '(이미 저장됨 — 변경 시 새로 입력)';
-  const statusEl = document.getElementById('sheetIdStatus');
-  statusEl.style.color = '#059669';
-  statusEl.textContent = '✓ 저장됨';
-});
-
-document.getElementById('saveToGoogleBtn').addEventListener('click', async () => {
-  const sheetId = await loadSheetId();
-  if (!sheetId) {
-    document.getElementById('googleSaveStatus').textContent = '설정 탭에서 스프레드시트 ID를 먼저 입력해주세요.';
-    document.getElementById('googleSaveStatus').style.color = '#dc2626';
-    return;
-  }
-
-  const statusEl = document.getElementById('googleSaveStatus');
-  statusEl.style.color = '#6b7280';
-  statusEl.textContent = '저장 중...';
-
-  try {
-    const result = await chrome.runtime.sendMessage({
-      action: 'saveToGoogle',
-      spreadsheetId: sheetId
-    });
-
-    if (result.ok) {
-      statusEl.innerHTML = `완료! <a href="${result.sheetUrl}" target="_blank" style="color:#2563eb;">시트 열기</a>`;
-    } else {
-      statusEl.textContent = '저장 실패: ' + (result.error || '알 수 없는 오류');
-      statusEl.style.color = '#dc2626';
-    }
-  } catch (err) {
-    statusEl.textContent = '저장 실패: ' + err.message;
-    statusEl.style.color = '#dc2626';
-  }
-});
-
 // ---- 유틸 ----
 function flashCopied(btnId) {
   const btn = document.getElementById(btnId);
@@ -442,51 +387,6 @@ function flashCopied(btnId) {
   btn.classList.add('copied');
   setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500);
 }
-
-// ============================================================
-// 설정 탭 — 서비스 계정 관리
-// ============================================================
-
-async function loadCredentialsStatus() {
-  const data = await chrome.storage.local.get(['serviceAccountCredentials']);
-  const creds = data.serviceAccountCredentials;
-  const statusEl = document.getElementById('credentialsStatus');
-  if (creds && creds.client_email) {
-    statusEl.style.color = '#059669';
-    statusEl.textContent = '✓ 설정됨: ' + creds.client_email;
-    document.getElementById('serviceAccountJson').value = '';
-    document.getElementById('serviceAccountJson').placeholder = '(이미 저장됨 — 변경 시 새로 붙여넣기)';
-  } else {
-    statusEl.textContent = '';
-  }
-}
-
-document.getElementById('saveCredentialsBtn').addEventListener('click', async () => {
-  const raw = document.getElementById('serviceAccountJson').value.trim();
-  if (!raw) return;
-  const statusEl = document.getElementById('credentialsStatus');
-  try {
-    const creds = JSON.parse(raw);
-    if (!creds.client_email || !creds.private_key) throw new Error('client_email / private_key 필드 없음');
-    await chrome.storage.local.set({ serviceAccountCredentials: creds });
-    statusEl.style.color = '#059669';
-    statusEl.textContent = '✓ 저장됨: ' + creds.client_email;
-    document.getElementById('serviceAccountJson').value = '';
-    document.getElementById('serviceAccountJson').placeholder = '(이미 저장됨 — 변경 시 새로 붙여넣기)';
-  } catch (e) {
-    statusEl.style.color = '#dc2626';
-    statusEl.textContent = '오류: ' + e.message;
-  }
-});
-
-document.getElementById('clearCredentialsBtn').addEventListener('click', async () => {
-  await chrome.storage.local.remove(['serviceAccountCredentials']);
-  document.getElementById('credentialsStatus').textContent = '';
-  document.getElementById('credentialsStatus').style.color = '#6b7280';
-  document.getElementById('serviceAccountJson').value = '';
-  document.getElementById('serviceAccountJson').placeholder =
-    '{"type":"service_account","project_id":"...","client_email":"...","private_key":"...",...}';
-});
 
 // ============================================================
 // 설정 탭 — 도메인별 API 토큰 관리 (F3 사용자 전환)
@@ -581,13 +481,6 @@ document.getElementById('tokenAddBtn').addEventListener('click', async () => {
 
 // ---- 초기 로드 ----
 (async () => {
-  const savedId = await loadSheetId();
-  if (savedId) {
-    document.getElementById('sheetIdInput').placeholder = '(이미 저장됨 — 변경 시 새로 입력)';
-    document.getElementById('sheetIdStatus').style.color = '#059669';
-    document.getElementById('sheetIdStatus').textContent = '✓ 저장됨';
-  }
-  await loadCredentialsStatus();
   await renderTokenList();
 })();
 

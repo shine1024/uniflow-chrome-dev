@@ -4,9 +4,6 @@
   "version": "0.3.0",
   "description": "UniFLOW 화면 컨텍스트 추출 + 접근경로 녹화 도구",
   "permissions": ["activeTab", "scripting", "storage", "tabs"],
-  "background": {
-    "service_worker": "background.js"
-  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],

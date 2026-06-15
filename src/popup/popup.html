@@ -156,31 +156,8 @@
       border-radius: 50%; animation: blink 1s infinite;
     }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-    .google-section {
-      padding: 10px 16px;
-      border-top: 1px solid #e5e5e5;
-      background: #f8faff;
-    }
-    .google-section-title {
-      font-size: 11px; font-weight: 700; color: #6b7280;
-      text-transform: uppercase; letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-    .sheet-id-row {
-      display: flex; gap: 6px; margin-bottom: 8px;
-    }
-    .sheet-id-row input {
-      flex: 1; padding: 5px 8px;
-      border: 1px solid #d1d5db; border-radius: 6px;
-      font-size: 11px; color: #374151;
-    }
-    .btn-google { background: #4285F4; color: #fff; width: 100%; }
-    .btn-google:hover { background: #3367D6; }
     .btn-sheet-save { background: #e5e7eb; color: #374151; font-size: 11px; padding: 5px 10px; }
     .btn-sheet-save:hover { background: #d1d5db; }
-    .google-save-status {
-      font-size: 11px; color: #6b7280; margin-top: 6px; min-height: 16px;
-    }
   </style>
 </head>
 <body>
@@ -230,11 +207,6 @@
         페이지를 이동해도 녹화가 유지됩니다.
       </div>
     </div>
-
-    <div class="google-section">
-      <button class="btn-google" id="saveToGoogleBtn">Google Sheets에 저장</button>
-      <div class="google-save-status" id="googleSaveStatus"></div>
-    </div>
   </div>
 
   <!-- 설정 탭 -->
@@ -261,49 +233,6 @@
         </div>
         <div id="tokenStatus" style="font-size:11px;color:#6b7280;margin-top:6px;min-height:16px;"></div>
         <ul class="file-list" id="tokenList" style="margin-top:6px;"></ul>
-      </div>
-
-      <div class="section">
-        <div class="section-title">스프레드시트 ID</div>
-        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.6;">
-          저장할 Google Sheets URL에서 ID를 복사하세요.<br>
-          <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">docs.google.com/spreadsheets/d/[여기]</code>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <input type="text" id="sheetIdInput" placeholder="스프레드시트 ID 입력"
-            style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">
-          <button class="btn-sheet-save" id="sheetIdSaveBtn">저장</button>
-        </div>
-        <div id="sheetIdStatus" style="font-size:11px;color:#6b7280;margin-top:6px;min-height:16px;"></div>
-      </div>
-
-<div class="section">
-        <div class="section-title">서비스 계정 JSON</div>
-        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.6;">
-          Google Cloud Console에서 발급한 서비스 계정 JSON 파일의<br>내용을 붙여넣으세요.
-        </div>
-        <textarea id="serviceAccountJson"
-          placeholder='{"type":"service_account","project_id":"...","client_email":"...","private_key":"...",...}'
-          style="width:100%;height:120px;font-size:10px;font-family:monospace;
-                 border:1px solid #d1d5db;border-radius:6px;padding:8px;resize:vertical;
-                 box-sizing:border-box;"></textarea>
-        <div style="display:flex;gap:6px;margin-top:6px;">
-          <button class="btn-extract" id="saveCredentialsBtn" style="flex:1;">저장</button>
-          <button class="btn-clear" id="clearCredentialsBtn">삭제</button>
-        </div>
-        <div id="credentialsStatus" style="font-size:11px;color:#6b7280;margin-top:6px;min-height:16px;"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">사용 방법</div>
-        <ol style="font-size:11px;color:#4b5563;line-height:2;padding-left:16px;">
-          <li>Google Cloud Console → 서비스 계정 생성</li>
-          <li>키 추가 → JSON 다운로드</li>
-          <li>JSON 파일 내용을 위 입력란에 붙여넣기</li>
-          <li>저장할 Google 스프레드시트를<br>
-            서비스 계정 이메일(<code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">client_email</code>)에 편집자 공유</li>
-          <li>녹화 탭에서 스프레드시트 ID 입력 후 저장</li>
-        </ol>
       </div>
     </div>
   </div>
