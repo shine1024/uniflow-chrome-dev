@@ -9,15 +9,13 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 ## 현재 상태 (v0.3)
 - ✅ **파일 추출**: script[src] + RequireJS 모듈(require.s.contexts._.defined, _.urlFetched) + CSS(link + @import) 추출
 - ✅ **접근경로 녹화**: 클릭 + input/change 이벤트 캡처 → 셀렉터 + 텍스트 라벨 + 입력값 기록
-- ✅ **input 이벤트**: 디바운싱 500ms, password 필드 마스킹, step type "input"
-- ✅ **스크린샷 캡처**: background.js service worker에서 captureVisibleTab, 녹화시작/navigate/중지 시점 자동 캡처
-- ✅ **요소 좌표맵**: 스크린샷 캡처 시점에 interactive 요소 rect 수집, step type "elements_map"
-- ✅ **Google Drive/Sheets 연동**: OAuth(chrome.identity) + Drive 업로드 + Sheets append
-- ✅ **녹화 바 UI**: Shadow DOM으로 페이지 CSS와 격리, 브라우저 상단 중앙 fixed
-- ✅ **복사**: 마크다운 형태로 클립보드 복사 (elements_map은 JSON 블록으로 포함)
-- ✅ **공통 파일 필터링**: COMMON_PATTERNS 배열 기반 (popup.js 상단)
+- ✅ **URL 변경 감지**: pushState/replaceState/popstate/hashchange + 전체 페이지 로드 추적 → step type "navigate". 페이지를 이동해도 녹화 유지(chrome.storage.local.recording)
+- ✅ **input 이벤트**: 디바운싱 500ms, password 필드 마스킹(****), step type "input"
+- ✅ **녹화 바 UI**: Shadow DOM으로 페이지 CSS와 격리, 브라우저 상단 중앙 fixed, [중지] 버튼
+- ✅ **복사**: 추출/녹화 결과를 마크다운 형태로 클립보드 복사
+- ✅ **공통 파일 필터링**: COMMON_PATTERNS 배열 기반 (popup.js 상단), 체크박스 토글
 - ✅ **CSS 중복 제거**: 쿼리스트링(?bust=...) 무시하고 경로 기준 dedup
-- ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js)
+- ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM, 헤더 드래그로 이동) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js)
 - ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (설정 탭). 즐겨찾기도 도메인별 저장
 
 ## 미구현 / 향후 계획
@@ -28,7 +26,8 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 - ❌ **COMMON_PATTERNS 커스터마이징**: UniFLOW 디렉터리 구조에 맞게 필터 패턴 조정 필요
 - ❌ **녹화 데이터 → 자연어 변환**: Claude API 후처리로 셀렉터+텍스트를 자연어 문장으로
 - ❌ **data-main 속성**: 메인 JS 특정을 위한 `<script data-main="true">` 마킹 (서버 쪽)
-- ❌ **Google OAuth client_id 설정**: manifest.json의 YOUR_GOOGLE_CLIENT_ID 실제 값으로 교체 필요
+- ❌ **스크린샷 캡처**: 녹화 시점 화면 자동 캡처(captureVisibleTab) — 별도 Service Worker 필요(현재 백그라운드 없음). popup.js에 screenshot step 렌더 코드만 잔존
+- ❌ **요소 좌표맵**: 캡처 시점 interactive 요소 rect 수집(step type "elements_map") — 스크린샷과 함께 구현 예정
 
 ## 기술 스택
 - Chrome Extension Manifest V3
@@ -40,15 +39,24 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 ## 파일 구조
 ```
 uniflow-devtool/
-  manifest.json    — Manifest V3, permissions + oauth2 설정
-  background.js    — Service Worker: 스크린샷 캡처, Google Drive/Sheets/OAuth API
-  popup.html       — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + Google 저장)
-  popup.js         — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + Google 저장 UI + 도메인별 토큰 관리
-  content.js       — 페이지 inject, 녹화 바, 클릭/input/URL 이벤트 캡처, 요소 좌표맵
-  userSwitch.js    — F3 사용자 전환 모달(Shadow DOM), 도메인별 토큰 조회 + 사용자 목록/즐겨찾기/로그인 전환 API
-  CLAUDE.md        — 이 파일
-  .task/           — 작업 계획 파일
+  manifest.json              — Manifest V3, permissions + 진입점 경로
+  icons/                     — 확장 아이콘 (16/48/128)
+  src/
+    content/
+      content.js            — 페이지 inject, 녹화 바, 클릭/input/URL 이벤트 캡처
+      userSwitch.js         — F3 사용자 전환 모달(Shadow DOM), 도메인별 토큰 조회 + 사용자 목록/즐겨찾기/로그인 전환 API
+    popup/
+      popup.html            — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + 설정 탭)
+      popup.js              — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + 도메인별 토큰 관리
+  docs/                      — 설계 메모·아키텍처 노트
+  .task/                     — 작업 계획 파일
+  README.md                  — 설치·사용법·설정
+  CLAUDE.md                  — 이 파일 (프로젝트 컨텍스트)
 ```
+
+> 진입점 경로 규칙: manifest.json의 `content_scripts.js`/`default_popup` 와
+> `popup.js`의 `executeScript({ files: ['src/content/content.js'] })` 는 모두 **확장 루트 기준 경로**다.
+> 소스를 옮기면 이 두 곳을 함께 갱신할 것.
 
 ## 대상 환경
 - UniFLOW: JSP + RequireJS 기반 웹시스템
