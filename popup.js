@@ -488,6 +488,97 @@ document.getElementById('clearCredentialsBtn').addEventListener('click', async (
     '{"type":"service_account","project_id":"...","client_email":"...","private_key":"...",...}';
 });
 
+// ============================================================
+// 설정 탭 — 도메인별 API 토큰 관리 (F3 사용자 전환)
+// chrome.storage.local: domainTokens = { "<host>": { clientKey, label } }
+// ============================================================
+
+const DOMAIN_TOKENS_KEY = 'domainTokens';
+
+async function loadDomainTokens() {
+  const data = await chrome.storage.local.get([DOMAIN_TOKENS_KEY]);
+  return data[DOMAIN_TOKENS_KEY] || {};
+}
+
+async function saveDomainTokens(map) {
+  await chrome.storage.local.set({ [DOMAIN_TOKENS_KEY]: map });
+}
+
+function maskToken(t) {
+  if (!t) return '';
+  return t.length <= 8 ? '****' : t.slice(0, 4) + '****' + t.slice(-4);
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function renderTokenList() {
+  const map = await loadDomainTokens();
+  const ul = document.getElementById('tokenList');
+  const domains = Object.keys(map);
+
+  if (!domains.length) {
+    ul.innerHTML = '<li style="color:#9ca3af;border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
+    return;
+  }
+
+  ul.innerHTML = domains.map(d => {
+    const entry = map[d];
+    const label = entry.label ? ` <span style="color:#6b7280;">(${escapeHtml(entry.label)})</span>` : '';
+    return `<li style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="word-break:break-all;">
+          <strong>${escapeHtml(d)}</strong>${label}<br>
+          <span style="color:#9ca3af;font-size:10px;">${escapeHtml(maskToken(entry.clientKey))}</span>
+        </span>
+        <a class="token-del" data-domain="${escapeHtml(d)}"
+           style="color:#dc2626;cursor:pointer;white-space:nowrap;text-decoration:none;">[삭제]</a>
+      </li>`;
+  }).join('');
+
+  ul.querySelectorAll('.token-del').forEach(a => {
+    a.onclick = async () => {
+      const m = await loadDomainTokens();
+      delete m[a.dataset.domain];
+      await saveDomainTokens(m);
+      renderTokenList();
+    };
+  });
+}
+
+document.getElementById('fillCurrentDomainBtn').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab && tab.url) {
+    try { document.getElementById('tokenDomainInput').value = new URL(tab.url).hostname; } catch {}
+  }
+});
+
+document.getElementById('tokenAddBtn').addEventListener('click', async () => {
+  const domain = document.getElementById('tokenDomainInput').value.trim();
+  const clientKey = document.getElementById('tokenKeyInput').value.trim();
+  const label = document.getElementById('tokenLabelInput').value.trim();
+  const statusEl = document.getElementById('tokenStatus');
+
+  if (!domain || !clientKey) {
+    statusEl.style.color = '#dc2626';
+    statusEl.textContent = '도메인과 clientKey 토큰을 모두 입력하세요.';
+    return;
+  }
+
+  const map = await loadDomainTokens();
+  map[domain] = { clientKey, label };
+  await saveDomainTokens(map);
+
+  document.getElementById('tokenDomainInput').value = '';
+  document.getElementById('tokenKeyInput').value = '';
+  document.getElementById('tokenLabelInput').value = '';
+  statusEl.style.color = '#059669';
+  statusEl.textContent = '✓ 등록됨: ' + domain;
+  renderTokenList();
+});
+
 // ---- 초기 로드 ----
 (async () => {
   const savedId = await loadSheetId();
@@ -497,6 +588,7 @@ document.getElementById('clearCredentialsBtn').addEventListener('click', async (
     document.getElementById('sheetIdStatus').textContent = '✓ 저장됨';
   }
   await loadCredentialsStatus();
+  await renderTokenList();
 })();
 
 updateRecordUI();

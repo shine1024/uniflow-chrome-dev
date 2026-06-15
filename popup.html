@@ -241,6 +241,29 @@
   <div class="tab-content" id="tab-settings">
     <div class="result-area">
       <div class="section">
+        <div class="section-title">도메인별 API 토큰 (F3 사용자 전환)</div>
+        <div style="font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.6;">
+          페이지에서 <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">F3</code> 사용자 전환 모달이
+          호출하는 <code style="background:#f3f4f6;padding:1px 4px;border-radius:3px;">clientKey</code> 토큰을
+          <strong>도메인 단위</strong>로 등록합니다.
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input type="text" id="tokenDomainInput" placeholder="도메인 (예: dev.uniflow.co.kr)"
+            style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">
+          <button class="btn-sheet-save" id="fillCurrentDomainBtn">현재 도메인</button>
+        </div>
+        <input type="text" id="tokenLabelInput" placeholder="구분 라벨 (선택, 예: 개발서버)"
+          style="width:100%;padding:5px 8px;margin-bottom:6px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;box-sizing:border-box;">
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="tokenKeyInput" placeholder="clientKey 토큰"
+            style="flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">
+          <button class="btn-extract" id="tokenAddBtn" style="flex:0 0 auto;">등록</button>
+        </div>
+        <div id="tokenStatus" style="font-size:11px;color:#6b7280;margin-top:6px;min-height:16px;"></div>
+        <ul class="file-list" id="tokenList" style="margin-top:6px;"></ul>
+      </div>
+
+      <div class="section">
         <div class="section-title">스프레드시트 ID</div>
         <div style="font-size:11px;color:#6b7280;margin-bottom:8px;line-height:1.6;">
           저장할 Google Sheets URL에서 ID를 복사하세요.<br>

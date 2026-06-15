@@ -17,6 +17,8 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 - ✅ **복사**: 마크다운 형태로 클립보드 복사 (elements_map은 JSON 블록으로 포함)
 - ✅ **공통 파일 필터링**: COMMON_PATTERNS 배열 기반 (popup.js 상단)
 - ✅ **CSS 중복 제거**: 쿼리스트링(?bust=...) 무시하고 경로 기준 dedup
+- ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js)
+- ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (설정 탭). 즐겨찾기도 도메인별 저장
 
 ## 미구현 / 향후 계획
 - ❌ **JSP 파일 표식**: 서버 쪽에 meta 태그 또는 data 속성으로 JSP 경로를 주입해야 함
@@ -41,8 +43,9 @@ uniflow-devtool/
   manifest.json    — Manifest V3, permissions + oauth2 설정
   background.js    — Service Worker: 스크린샷 캡처, Google Drive/Sheets/OAuth API
   popup.html       — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + Google 저장)
-  popup.js         — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + Google 저장 UI
+  popup.js         — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + Google 저장 UI + 도메인별 토큰 관리
   content.js       — 페이지 inject, 녹화 바, 클릭/input/URL 이벤트 캡처, 요소 좌표맵
+  userSwitch.js    — F3 사용자 전환 모달(Shadow DOM), 도메인별 토큰 조회 + 사용자 목록/즐겨찾기/로그인 전환 API
   CLAUDE.md        — 이 파일
   .task/           — 작업 계획 파일
 ```
