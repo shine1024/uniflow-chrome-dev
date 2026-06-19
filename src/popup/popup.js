@@ -262,6 +262,11 @@ function renderRecordResult(steps) {
     } else if (step.type === 'input') {
       const val = step.value !== undefined ? `<span class="step-text">→ "${step.value}"</span>` : '';
       html += `<li><span class="tag tag-input">입력</span>${step.selector} ${val}</li>`;
+    } else if (step.type === 'assert') {
+      const a = step.assertType === 'url' ? ('URL = ' + (step.expected || ''))
+        : step.assertType === 'containsText' ? ((step.selector || step.text || '') + ' ⊇ "' + (step.expected || '') + '"')
+        : ((step.text || step.selector || '') + ' 보임');
+      html += `<li><span class="tag tag-assert">검증</span>${a}</li>`;
     } else if (step.type === 'screenshot') {
       const thumb = step.imageData
         ? `<img class="screenshot-thumb" src="${step.imageData}" alt="screenshot">`
@@ -288,6 +293,11 @@ function toRecordMarkdown(steps) {
       lines.push(`${++idx}. click: ${step.selector}${text}`);
     } else if (step.type === 'input') {
       lines.push(`${++idx}. input: ${step.selector} → "${step.value}"`);
+    } else if (step.type === 'assert') {
+      const a = step.assertType === 'url' ? ('URL = ' + (step.expected || ''))
+        : step.assertType === 'containsText' ? ((step.selector || step.text || '') + ' contains "' + (step.expected || '') + '"')
+        : ((step.text || step.selector || '') + ' visible');
+      lines.push(`${++idx}. assert: ${a}`);
     } else if (step.type === 'elements_map' && step.elements) {
       lines.push(`${++idx}. elements_map:`);
       lines.push('```json');
@@ -348,6 +358,11 @@ document.getElementById('copyRecordBtn').addEventListener('click', async () => {
   flashCopied('copyRecordBtn');
 });
 
+// Playwright 시나리오 편집기 열기 (별도 탭)
+document.getElementById('openEditorBtn').addEventListener('click', () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('src/editor/editor.html') });
+});
+
 // UI 상태 업데이트
 async function updateRecordUI() {
   const data = await chrome.storage.local.get(['recording', 'steps']);
@@ -357,6 +372,7 @@ async function updateRecordUI() {
   const btn = document.getElementById('recordBtn');
   const status = document.getElementById('recordingStatus');
   const copyBtn = document.getElementById('copyRecordBtn');
+  const editorBtn = document.getElementById('openEditorBtn');
   const clearBtn = document.getElementById('clearBtn');
 
   if (recording) {
@@ -373,9 +389,11 @@ async function updateRecordUI() {
 
   if (steps.length > 0 && !recording) {
     copyBtn.style.display = 'inline-block';
+    editorBtn.style.display = 'inline-block';
     clearBtn.style.display = 'inline-block';
   } else {
     copyBtn.style.display = 'none';
+    editorBtn.style.display = 'none';
     clearBtn.style.display = 'none';
   }
 }

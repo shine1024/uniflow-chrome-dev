@@ -5,7 +5,14 @@
 let recordingBar = null;
 let clickHandler = null;
 let inputHandler = null;
-const inputDebounceTimers = new Map();
+const pendingInputs = new Map(); // 디바운스 대기 중인 입력 (selector -> {timer, commit})
+let assertMode = false;       // 검증 요소 선택 모드 활성
+let assertStage = null;       // 'pick'(요소 선택) | 'type'(유형 선택)
+let assertHover = null;       // 현재 하이라이트된 요소
+let highlightBox = null;      // 인스펙터 하이라이트 오버레이
+let hoverMoveHandler = null;  // 하이라이트용 mousemove 핸들러
+let typeMenuHost = null;      // 검증 유형 선택 메뉴 (Shadow DOM)
+let pickCursorStyle = null;   // 선택 모드 커서
 
 // ---- 셀렉터 생성 ----
 function getSelector(el) {
@@ -98,13 +105,24 @@ function findClickTarget(el) {
   return el;
 }
 
-// ---- Step 저장 ----
-async function addStep(step) {
-  const data = await chrome.storage.local.get(['steps']);
-  const steps = data.steps || [];
-  steps.push(step);
-  await chrome.storage.local.set({ steps });
-  updateCount(steps.length);
+// ---- Step 저장 (직렬화 — 동시 호출 시 경쟁 방지) ----
+let stepQueue = Promise.resolve();
+function addStep(step) {
+  stepQueue = stepQueue.then(async () => {
+    const data = await chrome.storage.local.get(['steps']);
+    const steps = data.steps || [];
+    steps.push(step);
+    await chrome.storage.local.set({ steps });
+    updateCount(steps.length);
+  });
+  return stepQueue;
+}
+
+// 대기 중인 입력을 즉시 커밋 (클릭/이동 직전에 호출해 누락 방지)
+function flushPendingInputs() {
+  const list = [...pendingInputs.values()];
+  pendingInputs.clear();
+  list.forEach((p) => { clearTimeout(p.timer); p.commit(); });
 }
 
 // ---- 녹화 바 카운트 업데이트 ----
@@ -159,11 +177,20 @@ function createRecordingBar() {
         transition: background 0.15s;
       }
       .stop-btn:hover { background: #fee2e2; }
+      .assert-btn {
+        background: rgba(255,255,255,0.18); color: #fff;
+        border: 1px solid rgba(255,255,255,0.45); padding: 5px 14px;
+        border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+        transition: background 0.15s;
+      }
+      .assert-btn:hover { background: rgba(255,255,255,0.32); }
+      .assert-btn.active { background: #fff; color: #16a34a; border-color: #fff; }
     </style>
     <div class="bar">
       <div class="dot"></div>
       <span class="label">녹화 중</span>
       <span class="count">0 클릭</span>
+      <button class="assert-btn">✓ 검증 추가</button>
       <button class="stop-btn">중지</button>
     </div>
   `;
@@ -177,7 +204,151 @@ function createRecordingBar() {
     stopRecording();
   });
 
+  // 검증 추가 버튼 — 다음에 클릭한 페이지 요소를 검증(assert) 대상으로 캡처
+  shadow.querySelector('.assert-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setAssertMode(!assertMode);
+  });
+
   return { host, shadow };
+}
+
+// ---- 검증(assert) 선택 모드 ----
+// 켜면 개발자도구 인스펙터처럼 요소를 하이라이트하고, 클릭하면 검증 유형 메뉴를 띄운다.
+function setAssertMode(on) {
+  assertMode = on;
+  if (on) startAssertPick(); else stopAssertPick();
+  if (!recordingBar) return;
+  const btn = recordingBar.shadow.querySelector('.assert-btn');
+  const label = recordingBar.shadow.querySelector('.label');
+  if (btn) { btn.classList.toggle('active', on); btn.textContent = on ? '취소' : '✓ 검증 추가'; }
+  if (label) label.textContent = on ? '✓ 검증할 요소에 마우스를 올려 클릭하세요' : '녹화 중';
+}
+
+function startAssertPick() {
+  assertStage = 'pick';
+  highlightBox = document.createElement('div');
+  highlightBox.id = 'uniflow-assert-highlight';
+  highlightBox.style.cssText =
+    'position:fixed;z-index:2147483646;pointer-events:none;display:none;' +
+    'background:rgba(35,131,226,0.18);border:2px solid #2383e2;border-radius:2px;' +
+    'box-shadow:0 0 0 1px rgba(255,255,255,0.5);';
+  document.documentElement.appendChild(highlightBox);
+
+  hoverMoveHandler = (e) => {
+    const el = pageElementUnder(e.target);
+    if (!el) { highlightBox.style.display = 'none'; assertHover = null; return; }
+    assertHover = el;
+    const r = el.getBoundingClientRect();
+    highlightBox.style.display = 'block';
+    highlightBox.style.left = r.left + 'px';
+    highlightBox.style.top = r.top + 'px';
+    highlightBox.style.width = r.width + 'px';
+    highlightBox.style.height = r.height + 'px';
+  };
+  document.addEventListener('mousemove', hoverMoveHandler, true);
+  setPickCursor(true);
+}
+
+function stopAssertPick() {
+  assertStage = null;
+  assertHover = null;
+  if (hoverMoveHandler) { document.removeEventListener('mousemove', hoverMoveHandler, true); hoverMoveHandler = null; }
+  if (highlightBox) { highlightBox.remove(); highlightBox = null; }
+  removeTypeMenu();
+  setPickCursor(false);
+}
+
+// 우리 UI(녹화 바·하이라이트·메뉴)는 제외하고 실제 페이지 요소만 반환
+function pageElementUnder(target) {
+  if (!target || target.nodeType !== 1) return null;
+  if (target.id === 'uniflow-assert-highlight') return null;
+  if (target.closest && (target.closest('#uniflow-devtool-recording-bar') || target.closest('#uniflow-assert-typemenu'))) return null;
+  return target;
+}
+
+function setPickCursor(on) {
+  if (on && !pickCursorStyle) {
+    pickCursorStyle = document.createElement('style');
+    pickCursorStyle.textContent = '*, *:hover { cursor: crosshair !important; }';
+    document.documentElement.appendChild(pickCursorStyle);
+  } else if (!on && pickCursorStyle) {
+    pickCursorStyle.remove(); pickCursorStyle = null;
+  }
+}
+
+// 클릭한 요소를 어떻게 검증할지 고르는 메뉴
+const ASSERT_TYPES = [
+  { v: 'visible', label: '요소 보임', desc: '이 요소가 화면에 있나' },
+  { v: 'hasText', label: '텍스트 일치', desc: '텍스트가 정확히 같나' },
+  { v: 'containsText', label: '텍스트 포함', desc: '텍스트를 포함하나' },
+  { v: 'hasValue', label: '입력값 일치', desc: 'input 값이 같나', formOnly: true },
+];
+
+function showTypeMenu(x, y, el) {
+  removeTypeMenu();
+  const isForm = ['input', 'textarea', 'select'].includes(el.tagName.toLowerCase());
+  const items = ASSERT_TYPES.filter((t) => !t.formOnly || isForm);
+  const host = document.createElement('div');
+  host.id = 'uniflow-assert-typemenu';
+  const shadow = host.attachShadow({ mode: 'open' });
+  shadow.innerHTML = `
+    <style>
+      :host { all: initial; }
+      .menu {
+        position: fixed; z-index: 2147483647; min-width: 210px;
+        background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 6px;
+        font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      }
+      .head { font-size: 11px; color: #9ca3af; padding: 5px 9px 7px; }
+      button {
+        display: block; width: 100%; text-align: left; border: none; background: none;
+        padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #1a1a2e;
+      }
+      button:hover { background: #eff6ff; }
+      button small { display: block; color: #9ca3af; font-size: 11px; margin-top: 1px; }
+      .cancel { color: #dc2626; border-top: 1px solid #f3f4f6; margin-top: 4px; }
+    </style>
+    <div class="menu">
+      <div class="head">이 요소를 어떻게 검증할까요?</div>
+      ${items.map((t) => `<button data-v="${t.v}">${t.label}<small>${t.desc}</small></button>`).join('')}
+      <button class="cancel" data-v="__cancel">취소</button>
+    </div>
+  `;
+  document.documentElement.appendChild(host);
+  const menu = shadow.querySelector('.menu');
+  const rows = items.length + 2;
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - 230)) + 'px';
+  menu.style.top = Math.max(8, Math.min(y, window.innerHeight - rows * 42)) + 'px';
+  shadow.querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      const v = b.dataset.v;
+      if (v === '__cancel') { setAssertMode(false); return; }
+      captureAssert(v, el);
+    });
+  });
+  typeMenuHost = host;
+}
+
+function removeTypeMenu() {
+  if (typeMenuHost) { typeMenuHost.remove(); typeMenuHost = null; }
+}
+
+async function captureAssert(assertType, el) {
+  const selector = getSelector(el);
+  const text = getLabel(el);
+  let expected = '';
+  if (assertType === 'hasText' || assertType === 'containsText') expected = text;
+  else if (assertType === 'hasValue') expected = (el.value != null ? String(el.value) : '');
+  await addStep({
+    type: 'assert', assertType, timestamp: Date.now(),
+    selector, text, expected, url: location.href
+  });
+  setAssertMode(false);
 }
 
 // ---- 녹화 시작 ----
@@ -194,6 +365,29 @@ async function startRecording() {
   clickHandler = async (e) => {
     const barHost = document.getElementById('uniflow-devtool-recording-bar');
     if (barHost && barHost.contains(e.target)) return;
+    if (typeMenuHost && typeMenuHost.contains(e.target)) return; // 유형 메뉴 클릭은 메뉴가 처리
+
+    // 검증 선택 모드: 요소 클릭 → 유형 선택 메뉴 / 메뉴 밖 클릭 → 취소 (페이지 동작은 막음)
+    if (assertMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (assertStage === 'pick') {
+        const el = assertHover || pageElementUnder(e.target);
+        if (el) {
+          assertStage = 'type';
+          if (highlightBox) highlightBox.style.display = 'none';
+          if (hoverMoveHandler) { document.removeEventListener('mousemove', hoverMoveHandler, true); hoverMoveHandler = null; }
+          setPickCursor(false);
+          showTypeMenu(e.clientX, e.clientY, el);
+        }
+      } else if (assertStage === 'type') {
+        setAssertMode(false); // 메뉴 밖 클릭 → 취소
+      }
+      return;
+    }
+
+    // 클릭 직전, 대기 중인 입력을 먼저 커밋 (예: 비밀번호 입력 후 바로 로그인 클릭 → 이동)
+    flushPendingInputs();
 
     const target = findClickTarget(e.target);
     const step = {
@@ -208,7 +402,7 @@ async function startRecording() {
     await addStep(step);
   };
 
-  // input/change/select 핸들러 (디바운싱 500ms)
+  // input/change 핸들러 — input은 500ms 디바운스, change(blur)는 즉시 커밋
   inputHandler = (e) => {
     const barHost = document.getElementById('uniflow-devtool-recording-bar');
     if (barHost && barHost.contains(e.target)) return;
@@ -218,25 +412,32 @@ async function startRecording() {
     if (!['input', 'textarea', 'select'].includes(tag)) return;
 
     const key = getSelector(el);
-    clearTimeout(inputDebounceTimers.get(key));
+    const prev = pendingInputs.get(key);
+    if (prev) clearTimeout(prev.timer);
 
-    inputDebounceTimers.set(key, setTimeout(async () => {
-      inputDebounceTimers.delete(key);
+    const commit = () => {
+      pendingInputs.delete(key);
       const inputType = el.getAttribute('type') || tag;
-      const rawValue = el.value || '';
-      const maskedValue = inputType === 'password' ? '****' : rawValue.substring(0, 100);
-
-      await addStep({
+      // 테스트 목적: 비밀번호도 실제 입력값 그대로 기록(시나리오 재현 시 로그인되도록).
+      // 주의 — 평문이 chrome.storage·생성 코드에 저장된다.
+      const value = (el.value || '').substring(0, 100);
+      addStep({
         type: 'input',
         timestamp: Date.now(),
         selector: key,
         tag,
         inputType,
-        value: maskedValue,
+        value: value,
         label: getLabel(el),
         url: location.href
       });
-    }, 500));
+    };
+
+    if (e.type === 'change') {
+      commit(); // blur 시 즉시 (예: 비밀번호 입력 후 로그인 버튼 클릭)
+    } else {
+      pendingInputs.set(key, { timer: setTimeout(commit, 500), commit });
+    }
   };
 
   document.addEventListener('click', clickHandler, true);
@@ -285,6 +486,7 @@ async function checkUrlChange() {
 // ---- 녹화 중지 ----
 async function stopRecording() {
   await chrome.storage.local.set({ recording: false });
+  assertMode = false; stopAssertPick();
 
   if (clickHandler) {
     document.removeEventListener('click', clickHandler, true);
@@ -295,8 +497,7 @@ async function stopRecording() {
     document.removeEventListener('change', inputHandler, true);
     inputHandler = null;
   }
-  inputDebounceTimers.forEach(t => clearTimeout(t));
-  inputDebounceTimers.clear();
+  flushPendingInputs();
 
   if (recordingBar) {
     recordingBar.host.remove();
@@ -306,6 +507,7 @@ async function stopRecording() {
 
 // ---- 녹화 바 제거만 (페이지 이동 시 cleanup) ----
 function removeBar() {
+  assertMode = false; stopAssertPick();
   if (recordingBar) {
     recordingBar.host.remove();
     recordingBar = null;
@@ -319,8 +521,7 @@ function removeBar() {
     document.removeEventListener('change', inputHandler, true);
     inputHandler = null;
   }
-  inputDebounceTimers.forEach(t => clearTimeout(t));
-  inputDebounceTimers.clear();
+  flushPendingInputs();
 }
 
 // ---- 초기화: 페이지 로드 시 녹화 상태 확인 ----

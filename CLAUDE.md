@@ -17,13 +17,14 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 - ✅ **파일 추출**: script[src] + RequireJS 모듈(require.s.contexts._.defined, _.urlFetched) + CSS(link + @import) 추출
 - ✅ **접근경로 녹화**: 클릭 + input/change 이벤트 캡처 → 셀렉터 + 텍스트 라벨 + 입력값 기록
 - ✅ **URL 변경 감지**: pushState/replaceState/popstate/hashchange + 전체 페이지 로드 추적 → step type "navigate". 페이지를 이동해도 녹화 유지(chrome.storage.local.recording)
-- ✅ **input 이벤트**: 디바운싱 500ms, password 필드 마스킹(****), step type "input"
+- ✅ **input 이벤트**: 디바운싱 500ms, step type "input". 테스트 재현 목적상 **비밀번호도 실제 값 그대로 기록**(평문이 chrome.storage·생성 코드에 저장됨 — 주의)
 - ✅ **녹화 바 UI**: Shadow DOM으로 페이지 CSS와 격리, 브라우저 상단 중앙 fixed, [중지] 버튼
 - ✅ **복사**: 추출/녹화 결과를 마크다운 형태로 클립보드 복사
 - ✅ **공통 파일 필터링**: COMMON_PATTERNS 배열 기반 (popup.js 상단), 체크박스 토글
 - ✅ **CSS 중복 제거**: 쿼리스트링(?bust=...) 무시하고 경로 기준 dedup
 - ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM, 헤더 드래그로 이동) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js)
 - ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (설정 탭). 즐겨찾기도 도메인별 저장
+- ✅ **Playwright 내보내기 (1차)**: 녹화 시나리오를 별도 편집기 페이지(`src/editor`, 새 탭)에서 번호 타임라인 카드로 보고 → 삭제/드래그 재정렬/값·갭(`waitForTimeout`) 편집 + **검증(`expect`) 스텝**(요소 보임 / 텍스트 일치 / 텍스트 포함 / 입력값 일치 / URL 일치)으로 성공·실패 판정 → Playwright `.spec.ts` 실시간 미리보기·복사·다운로드. 검증은 편집기에서 추가하거나 **녹화 중 녹화 바 "✓ 검증 추가" → 인스펙터식 하이라이트로 요소를 짚고 클릭 → 검증 유형 메뉴에서 선택해 캡처**. 편집본은 `chrome.storage.local.scenario` 에 저장 (상세: `.task/001-playwright-export.md`)
 
 ## 기술 스택
 - Chrome Extension Manifest V3
@@ -44,6 +45,9 @@ uniflow-devtool/
     popup/
       popup.html            — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + 설정 탭)
       popup.js              — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + 도메인별 토큰 관리
+    editor/
+      editor.html           — 시나리오 편집기(별도 탭): 번호 카드 편집 + Playwright 미리보기/내보내기
+      editor.js             — 녹화 스텝 로드/편집(삭제·재정렬·값·갭)/Playwright 코드 생성
   docs/                      — 설계 메모·아키텍처 노트
   .task/                     — 작업 기록/진행 관리
     WORKLOG.md              — 시간순 작업 히스토리 (최신이 위)

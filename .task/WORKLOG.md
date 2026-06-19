@@ -13,6 +13,33 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-06-17~19 — 시나리오 녹화 → Playwright 편집기 1차 + 녹화/UI 개선 (커밋 완료)
+- content.js: 녹화 바 "✓ 검증 추가" 모드 → 페이지 요소를 클릭하면 selector·text 자동 캡처해 assert 스텝 생성 (편집기 왕복 없이 녹화 흐름 안에서 검증 — "투스텝" 끊김 해소)
+- 팝업 녹화 결과/복사에 assert 표시, editor `normalizeFromRaw`가 `assertType`/`expected` 보존
+- 팝업 UI를 노션풍 디자인 토큰(Segoe UI 15px · 라이트 헤더 · 부드러운 보더/여백, `:root` 변수화)으로 개편 — 편집기/F3/녹화 바 확장 예정
+- 편집기: 시나리오 **설명란** 추가(저장 + 내보낸 코드 상단 주석으로 포함)
+- 편집기: 단계 카드를 **번호 노드 + 연속 타임라인 선**으로 연결 flow 시각화, 갭(대기시간)은 칩으로 표시
+- 편집기: 시나리오 **설명란** 추가 (저장 + 내보낸 코드 상단 주석)
+- 🐛 수정: 편집기 열 때 **새 녹화 자동 감지** — 저장된 편집본이 *다른* 녹화면 새 녹화를 자동 로드(같은 녹화면 편집본 유지). "옛 데이터가 떠서 아이디/검증 입력이 안 되던" 문제 해결 (`scenario.sourceRecId` = 첫 스텝 timestamp로 판별)
+- 🐛 수정: **비밀번호 입력 값 편집 반영** — 편집 전 마스킹(`****`)일 때만 `process.env.PASSWORD`, 사용자가 값을 넣으면 그 값으로 `fill`
+- 🐛 수정: **input/textarea/select 클릭 locator** — `getByText`(placeholder를 텍스트로 오인) 대신 셀렉터(`page.locator`) 사용. 버튼/링크는 `getByRole`, 일반 텍스트 요소는 `getByText` 유지
+- 변경: **비밀번호 마스킹 해제** — 테스트 재현 목적상 실제 입력값을 그대로 기록(→ 코드젠이 `page.fill`에 실제 값 사용). 평문 저장 트레이드오프는 수용
+- 🐛 수정: **입력 스텝 누락** — 입력은 500ms 디바운스라, 비밀번호 입력 후 바로 로그인 클릭→이동하면 타이머가 취소돼 스텝이 빠지던 문제. ① 클릭 기록 직전 대기 입력 flush ② `change`(blur) 시 즉시 커밋 ③ `addStep` 직렬화(경쟁 방지). Playwright로 "입력 직후 즉시 클릭" 시 비밀번호 스텝 보존 검증
+- 검증 유형 세분화: **요소 보임 / 텍스트 일치(`toHaveText`) / 텍스트 포함(`toContainText`) / 입력값 일치(`toHaveValue`) / URL 일치**
+- 녹화 중 검증 캡처를 **개발자도구 인스펙터식**으로 개선: hover 시 요소 하이라이트 → 클릭하면 그 자리에서 검증 유형 선택 메뉴 → selector·text·기대값 자동 캡처 (input엔 '입력값 일치'만 노출하고 값 자동 채움). Playwright로 hover/메뉴/캡처 전 과정 구동 검증
+- Playwright(MCP) + `chrome.storage` 목 하니스로 입력/저장/검증/자동로드 **실제 구동 검증 완료**
+- ✅ **결과**: 녹화 → 편집 → 검증 → 내보내기 → **실제 Playwright 실행 성공**까지 1바퀴 검증 완료 (사용자 확인)
+- 📦 이 세션 작업을 `9354d4d` 위에 단일 커밋으로 정리·푸시 (`.claude/`·`.playwright-mcp/`는 `.gitignore` 제외). 커밋 해시는 git log 참고
+- 다음 할 일은 BACKLOG "다음 세션 이어가기" 참고
+
+### 2026-06-16 — Playwright 내보내기 1차 (시나리오 편집기)
+- `src/editor` 신규: 녹화 스텝을 번호 타임라인 카드로 편집(삭제·드래그 재정렬·값·갭·사용여부) + Playwright `.spec.ts` 실시간 미리보기/복사/다운로드
+- gap = `timestamp` 차이 자동 산출 → `waitForTimeout`(적용 토글+임계값), locator 우선순위(role/text/CSS 폴백)
+- 검증(assert) 스텝: URL 일치 / 요소·텍스트 보임 / 텍스트 포함 → `expect` 코드로 성공·실패 판정
+- 편집본 `chrome.storage.local.scenario` 저장 + "녹화에서 불러오기", 팝업 녹화탭에 "▶ Playwright" 버튼
+- 설계/진행: `.task/001-playwright-export.md`
+- 커밋: (이번 작업)
+
 ### 2026-06-15 — README 기능 가이드 개편
 - 도구 성격을 "UniFLOW 구축·운영 개발자 편의 도구"로 재정의
 - 사용법 표 → 기능별(정의·용도·사용법) 항목으로 재구성
