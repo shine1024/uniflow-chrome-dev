@@ -497,9 +497,81 @@ document.getElementById('tokenAddBtn').addEventListener('click', async () => {
   renderTokenList();
 });
 
+// ============================================================
+// 설정 탭 — 도메인별 자동로그인 관리 (F2)
+// chrome.storage.local: domainAutoLogin = { "<host>": { username, password, idSel, pwSel, loginBtnSel, logoutBtnSel } }
+// 등록 절차(요소 선택 포함)는 페이지에 뜨는 등록 패널(content/autoLogin.js)에서 진행한다.
+// 이 탭은 패널 열기 버튼과 등록된 도메인 목록(삭제)만 담당한다.
+// ============================================================
+
+const DOMAIN_AUTOLOGIN_KEY = 'domainAutoLogin';
+const AL_FIELDS = [
+  { key: 'idSel', label: '아이디' },
+  { key: 'pwSel', label: '비밀번호' },
+  { key: 'loginBtnSel', label: '로그인' },
+  { key: 'logoutBtnSel', label: '로그아웃' }
+];
+
+async function loadAutoLogin() {
+  const data = await chrome.storage.local.get([DOMAIN_AUTOLOGIN_KEY]);
+  return data[DOMAIN_AUTOLOGIN_KEY] || {};
+}
+
+async function saveAutoLogin(map) {
+  await chrome.storage.local.set({ [DOMAIN_AUTOLOGIN_KEY]: map });
+}
+
+async function renderAutoLoginList() {
+  const map = await loadAutoLogin();
+  const ul = document.getElementById('alList');
+  const domains = Object.keys(map);
+
+  if (!domains.length) {
+    ul.innerHTML = '<li style="color:#9ca3af;border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
+    return;
+  }
+
+  ul.innerHTML = domains.map(d => {
+    const entry = map[d];
+    const selSummary = AL_FIELDS.map(f => `${f.label} ${entry[f.key] ? '✓' : '✗'}`).join(' · ');
+    return `<li style="display:block;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <strong style="word-break:break-all;">${escapeHtml(d)}</strong>
+          <a class="al-del" data-domain="${escapeHtml(d)}" style="color:#dc2626;cursor:pointer;text-decoration:none;">[삭제]</a>
+        </div>
+        <div style="color:#9ca3af;font-size:11px;margin-top:2px;">아이디: ${escapeHtml(entry.username || '')} · 비번: ${entry.password ? '****' : '(없음)'}</div>
+        <div style="color:#9ca3af;font-size:11px;margin-top:1px;">${selSummary}</div>
+      </li>`;
+  }).join('');
+
+  ul.querySelectorAll('.al-del').forEach(a => {
+    a.onclick = async () => {
+      const m = await loadAutoLogin();
+      delete m[a.dataset.domain];
+      await saveAutoLogin(m);
+      renderAutoLoginList();
+    };
+  });
+}
+
+// 현재 탭에 등록 패널을 띄우고 팝업을 닫는다 (요소를 페이지에서 직접 짚어야 하므로)
+document.getElementById('alOpenPanelBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('alStatus');
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { action: 'openAutoLoginPanel' });
+    window.close();
+  } catch (e) {
+    statusEl.style.color = '#dc2626';
+    statusEl.textContent = '콘텐츠 스크립트에 연결할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도하세요.';
+  }
+});
+
 // ---- 초기 로드 ----
 (async () => {
   await renderTokenList();
+  await renderAutoLoginList();
 })();
 
 updateRecordUI();

@@ -17,15 +17,17 @@ let pickCursorStyle = null;   // 선택 모드 커서
 // ---- 셀렉터 생성 ----
 function getSelector(el) {
   if (!el || el === document.body || el === document.documentElement) return 'body';
-  if (el.id) return '#' + CSS.escape(el.id);
+  const elId = el.getAttribute('id');
+  if (elId) return '#' + CSS.escape(elId);
 
   const parts = [];
   let current = el;
   while (current && current !== document.body && parts.length < 4) {
     let selector = current.tagName.toLowerCase();
 
-    if (current.id) {
-      parts.unshift('#' + CSS.escape(current.id));
+    const curId = current.getAttribute('id');
+    if (curId) {
+      parts.unshift('#' + CSS.escape(curId));
       break;
     }
 

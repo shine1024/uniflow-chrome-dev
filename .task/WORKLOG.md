@@ -13,6 +13,22 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-06-23 — F2 로그인 상태 판정 방식 변경 (로그인 폼 기준)
+- 기존: "로그아웃 버튼이 보이면 로그인 상태"로 역추론 → 로그아웃 버튼은 선택 등록이라 미등록 시 토글 불가, 단일 신호 의존
+- 변경: **로그인 폼(아이디·비번 입력칸) 가시성**을 1차 신호로. 폼이 보이면 로그인 전→자동로그인, 안 보이면 로그인 상태→로그아웃 버튼 클릭. 폼·로그아웃 버튼 모두 못 찾으면 셀렉터 점검 토스트로 중단(무작정 동작 안 함)
+- `isVisible()` 보강: width/height 0뿐 아니라 `visibility:hidden/collapse`·`opacity:0`도 비가시로 처리
+- `autoLogin.js`의 `handleF2()`·`isVisible()` 수정, CLAUDE.md F2 설명 갱신
+
+### 2026-06-22 — 자동로그인(F2) 기능 도입
+- 구버전 확장 `uniflow-chrome-extension/keyHandler.js`의 F2 자동로그인을 본 프로젝트로 이식. 원본의 하드코딩(아이디 `uniflow`/비번/`#id`·`.btn-login` 셀렉터)은 가져오지 않고 **도메인별 chrome.storage.local 저장**으로 전환 (`domainTokens` 패턴 동일)
+- 신규 `src/content/autoLogin.js`: F2 → 도메인 설정 읽어 로그아웃 버튼이 보이면 로그아웃, 아니면 아이디/비번 채우고(input·change 이벤트) 로그인 버튼 클릭. 설정 없으면 안내 토스트
+- 사이트마다 로그인/비번 칸·로그인·**로그아웃 버튼이 다름** → 4개 요소를 모두 도메인별로 등록. 로그인 상태 감지는 원본의 `.session` 대신 "로그아웃 버튼 존재"로 판단
+- 요소 선택 피커: content.js의 하이라이트 디자인(파란 오버레이·crosshair·`pageElementUnder`)을 재사용한 독립 피커. 셀렉터 생성은 content.js의 전역 `getSelector` 공유(같은 isolated world, manifest 로드 순서로 보장)
+- 등록 UI = **페이지에 뜨는 드래그 가능한 등록 패널**(Shadow DOM, autoLogin.js): 아이디(입력값+요소선택) · 비밀번호(입력값+요소선택) · 로그인 버튼(요소선택) · 로그아웃(선택) → [저장]. 패널이 떠 있는 채로 요소를 짚으므로 팝업이 닫히는 문제·초안 우회가 없음(초안 방식 폐기). 헤더 드래그로 이동(userSwitch 패턴)
+- 팝업 설정 탭은 "현재 페이지에 등록 패널 열기" 버튼 + 등록된 도메인 목록([삭제])만 담당. 패널은 열 때 해당 도메인의 기존 설정을 불러옴(수정 겸용)
+- 변경 파일: `manifest.json`(content_scripts에 autoLogin.js 추가), `src/content/autoLogin.js`(신규·등록 패널 포함), `src/popup/popup.html`·`popup.js`(설정 탭: 패널 열기 버튼+목록)
+- 메모: 비밀번호 평문 저장(녹화 input과 동일 트레이드오프, 설정 섹션에 주의 문구). 미커밋 — 브라우저 실동작 검증은 사용자 확인 후
+
 ### 2026-06-17~19 — 시나리오 녹화 → Playwright 편집기 1차 + 녹화/UI 개선 (커밋 완료)
 - content.js: 녹화 바 "✓ 검증 추가" 모드 → 페이지 요소를 클릭하면 selector·text 자동 캡처해 assert 스텝 생성 (편집기 왕복 없이 녹화 흐름 안에서 검증 — "투스텝" 끊김 해소)
 - 팝업 녹화 결과/복사에 assert 표시, editor `normalizeFromRaw`가 `assertType`/`expected` 보존
