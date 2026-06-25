@@ -179,7 +179,7 @@ function renderExtractResult(data, filterCommon) {
       html += `<li class="${cls}">${tag}${shortenUrl(url)}</li>`;
     });
     html += '</ul>';
-  } else html += '<div style="color:#9ca3af;font-size:12px;">JS 파일 없음</div>';
+  } else html += '<div style="color:var(--text-3);font-size:12px;">JS 파일 없음</div>';
   html += '</div>';
 
   html += `<div class="section"><div class="section-title">CSS 파일 <span class="count">${styles.length}</span></div>`;
@@ -187,7 +187,7 @@ function renderExtractResult(data, filterCommon) {
     html += '<ul class="file-list">';
     styles.forEach(s => html += `<li><span class="tag tag-style">css</span>${shortenUrl(s.href)}</li>`);
     html += '</ul>';
-  } else html += '<div style="color:#9ca3af;font-size:12px;">CSS 파일 없음</div>';
+  } else html += '<div style="color:var(--text-3);font-size:12px;">CSS 파일 없음</div>';
   html += '</div>';
   return html;
 }
@@ -208,7 +208,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
     const vi = data.viewInfo;
     const displayName = vi && vi.viewNm ? vi.viewNm : data.title;
     const displaySub = vi && vi.viewProgramPath
-      ? `<span style="color:#2563eb;font-weight:600;">${vi.viewProgramPath}</span>`
+      ? `<span style="color:var(--accent);font-weight:600;">${vi.viewProgramPath}</span>`
       : data.url;
     document.getElementById('pageInfo').innerHTML = `<strong>${displayName}</strong><br>${displaySub}`;
     document.getElementById('filterRow').classList.add('show');
@@ -217,7 +217,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
     document.getElementById('copyExtractBtn').style.display = 'inline-block';
   } catch (err) {
     document.getElementById('extractResult').innerHTML =
-      `<div class="empty" style="color:#ef4444;">추출 실패<br><span style="font-size:11px;">${err.message}</span></div>`;
+      `<div class="empty" style="color:var(--danger-deep);">추출 실패<br><span style="font-size:11px;">${err.message}</span></div>`;
   }
 });
 
@@ -439,20 +439,20 @@ async function renderTokenList() {
   const domains = Object.keys(map);
 
   if (!domains.length) {
-    ul.innerHTML = '<li style="color:#9ca3af;border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
+    ul.innerHTML = '<li style="color:var(--text-3);border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
     return;
   }
 
   ul.innerHTML = domains.map(d => {
     const entry = map[d];
-    const label = entry.label ? ` <span style="color:#6b7280;">(${escapeHtml(entry.label)})</span>` : '';
+    const label = entry.label ? ` <span style="color:var(--text-3);">(${escapeHtml(entry.label)})</span>` : '';
     return `<li style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <span style="word-break:break-all;">
           <strong>${escapeHtml(d)}</strong>${label}<br>
-          <span style="color:#9ca3af;font-size:10px;">${escapeHtml(maskToken(entry.clientKey))}</span>
+          <span style="color:var(--text-3);font-size:10px;">${escapeHtml(maskToken(entry.clientKey))}</span>
         </span>
         <a class="token-del" data-domain="${escapeHtml(d)}"
-           style="color:#dc2626;cursor:pointer;white-space:nowrap;text-decoration:none;">[삭제]</a>
+           style="color:var(--danger-deep);cursor:pointer;white-space:nowrap;text-decoration:none;">[삭제]</a>
       </li>`;
   }).join('');
 
@@ -480,7 +480,7 @@ document.getElementById('tokenAddBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('tokenStatus');
 
   if (!domain || !clientKey) {
-    statusEl.style.color = '#dc2626';
+    statusEl.style.color = 'var(--danger-deep)';
     statusEl.textContent = '도메인과 clientKey 토큰을 모두 입력하세요.';
     return;
   }
@@ -492,7 +492,7 @@ document.getElementById('tokenAddBtn').addEventListener('click', async () => {
   document.getElementById('tokenDomainInput').value = '';
   document.getElementById('tokenKeyInput').value = '';
   document.getElementById('tokenLabelInput').value = '';
-  statusEl.style.color = '#059669';
+  statusEl.style.color = 'var(--accent)';
   statusEl.textContent = '✓ 등록됨: ' + domain;
   renderTokenList();
 });
@@ -527,7 +527,7 @@ async function renderAutoLoginList() {
   const domains = Object.keys(map);
 
   if (!domains.length) {
-    ul.innerHTML = '<li style="color:#9ca3af;border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
+    ul.innerHTML = '<li style="color:var(--text-3);border:none;background:none;padding:4px 0;">등록된 도메인이 없습니다.</li>';
     return;
   }
 
@@ -537,10 +537,10 @@ async function renderAutoLoginList() {
     return `<li style="display:block;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <strong style="word-break:break-all;">${escapeHtml(d)}</strong>
-          <a class="al-del" data-domain="${escapeHtml(d)}" style="color:#dc2626;cursor:pointer;text-decoration:none;">[삭제]</a>
+          <a class="al-del" data-domain="${escapeHtml(d)}" style="color:var(--danger-deep);cursor:pointer;text-decoration:none;">[삭제]</a>
         </div>
-        <div style="color:#9ca3af;font-size:11px;margin-top:2px;">아이디: ${escapeHtml(entry.username || '')} · 비번: ${entry.password ? '****' : '(없음)'}</div>
-        <div style="color:#9ca3af;font-size:11px;margin-top:1px;">${selSummary}</div>
+        <div style="color:var(--text-3);font-size:11px;margin-top:2px;">아이디: ${escapeHtml(entry.username || '')} · 비번: ${entry.password ? '****' : '(없음)'}</div>
+        <div style="color:var(--text-3);font-size:11px;margin-top:1px;">${selSummary}</div>
       </li>`;
   }).join('');
 
@@ -563,7 +563,7 @@ document.getElementById('alOpenPanelBtn').addEventListener('click', async () => 
     await chrome.tabs.sendMessage(tab.id, { action: 'openAutoLoginPanel' });
     window.close();
   } catch (e) {
-    statusEl.style.color = '#dc2626';
+    statusEl.style.color = 'var(--danger-deep)';
     statusEl.textContent = '콘텐츠 스크립트에 연결할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도하세요.';
   }
 });

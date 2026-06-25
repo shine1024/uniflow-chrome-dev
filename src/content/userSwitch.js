@@ -99,52 +99,52 @@
         margin-bottom: 12px;
         cursor: move; user-select: none;
       }
-      .modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: #1a1a2e; }
+      .modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; color: #1a1a1a; }
       .domain {
-        font-size: 12px; font-weight: 500; color: #2563eb;
+        font-size: 12px; font-weight: 500; color: #024ad8;
         background: #eff6ff; padding: 2px 8px; border-radius: 8px; margin-left: 8px;
       }
       .close-btn {
-        background: #fff; color: #6b7280; border: 1px solid #ddd;
-        width: 28px; height: 28px; border-radius: 6px; font-size: 14px;
+        background: #fff; color: #636363; border: 1px solid #e8e8e8;
+        width: 28px; height: 28px; border-radius: 4px; font-size: 14px;
         cursor: pointer; line-height: 1;
       }
-      .close-btn:hover { background: #f8f9fa; color: #111; }
+      .close-btn:hover { background: #f7f7f7; color: #1a1a1a; }
       .msg {
         display: none; font-size: 12px; line-height: 1.5;
         padding: 8px 12px; border-radius: 6px; margin-bottom: 10px;
       }
       .msg.show { display: block; }
       .msg.warn  { background: #fef9c3; color: #854d0e; }
-      .msg.error { background: #fee2e2; color: #b91c1c; }
-      .msg.info  { background: #eff6ff; color: #1e40af; }
+      .msg.error { background: #fff0f0; color: #b3262b; }
+      .msg.info  { background: #eff6ff; color: #0e3191; }
       .tables { display: flex; gap: 18px; flex: 1; overflow: hidden; }
       .col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-      .col h4 { margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #333; }
+      .col h4 { margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
       .search {
         width: 100%; padding: 6px 10px; margin-bottom: 8px; box-sizing: border-box;
-        border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;
+        border: 1px solid #c2c2c2; border-radius: 4px; font-size: 12px;
       }
-      .scroll { overflow-y: auto; flex: 1; border: 1px solid #e5e7eb; border-radius: 6px; }
+      .scroll { overflow-y: auto; flex: 1; border: 1px solid #e8e8e8; border-radius: 8px; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       th, td {
-        border-bottom: 1px solid #eee; padding: 8px 8px; font-size: 12px;
-        text-align: left; color: #333; word-break: break-all;
+        border-bottom: 1px solid #e8e8e8; padding: 8px 8px; font-size: 12px;
+        text-align: left; color: #3d3d3d; word-break: break-all;
       }
       th {
-        background: #f8f9fa; position: sticky; top: 0;
-        font-weight: 600; font-size: 11px; color: #555;
+        background: #f7f7f7; position: sticky; top: 0;
+        font-weight: 600; font-size: 11px; color: #636363;
       }
-      th:first-child, td:first-child { width: 28px; text-align: center; color: #9ca3af; }
+      th:first-child, td:first-child { width: 28px; text-align: center; color: #c2c2c2; }
       td.ac, th.ac { text-align: center; width: 48px; }
-      tbody tr:hover { background: #f8faff; }
-      a { color: #2563eb; cursor: pointer; text-decoration: none; }
+      tbody tr:hover { background: #f0f4fd; }
+      a { color: #024ad8; cursor: pointer; text-decoration: none; }
       a:hover { text-decoration: underline; }
       .fav-toggle { font-size: 15px; color: #f59e0b; text-decoration: none; }
-      .remove-fav { color: #dc2626; font-size: 11px; }
+      .remove-fav { color: #b3262b; font-size: 11px; }
       .scroll::-webkit-scrollbar { width: 8px; }
-      .scroll::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
-      .empty-row td { text-align: center; color: #9ca3af; padding: 24px; }
+      .scroll::-webkit-scrollbar-thumb { background: #c2c2c2; border-radius: 4px; }
+      .empty-row td { text-align: center; color: #636363; padding: 24px; }
     </style>
     <div class="overlay">
       <div class="modal">

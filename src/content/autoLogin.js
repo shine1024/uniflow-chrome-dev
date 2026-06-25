@@ -127,53 +127,53 @@
     <style>
       :host { all: initial; }
       .panel {
-        position: fixed; top: 80px; right: 24px; width: 340px;
-        background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+        position: fixed; top: 80px; right: 24px; width: 384px;
+        background: #fff; border: 1px solid #e8e8e8; border-radius: 12px;
         box-shadow: 0 12px 40px rgba(0,0,0,0.22);
-        font-family: -apple-system, 'Malgun Gothic', sans-serif; color: #1a1a2e;
+        font-family: -apple-system, 'Malgun Gothic', sans-serif; color: #1a1a1a;
         z-index: 2147483647;
       }
       .hd {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 11px 14px; border-bottom: 1px solid #eee;
+        padding: 11px 14px; border-bottom: 1px solid #e8e8e8;
         cursor: move; user-select: none;
       }
       .hd h3 { margin: 0; font-size: 14px; font-weight: 600; }
       .hd .host {
-        font-size: 11px; font-weight: 500; color: #2563eb;
+        font-size: 11px; font-weight: 500; color: #024ad8;
         background: #eff6ff; padding: 1px 7px; border-radius: 7px; margin-left: 6px;
       }
       .x {
         background: none; border: none; font-size: 15px; line-height: 1;
-        cursor: pointer; color: #6b7280; padding: 2px 4px;
+        cursor: pointer; color: #636363; padding: 2px 4px;
       }
-      .x:hover { color: #111; }
+      .x:hover { color: #1a1a1a; }
       .bd { padding: 12px 14px; }
       .warn { font-size: 11px; color: #b45309; margin-bottom: 10px; line-height: 1.5; }
       .row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-      .row label { flex: 0 0 72px; font-size: 12px; color: #6b7280; }
-      .row label small { color: #9ca3af; }
+      .row label { flex: 0 0 92px; font-size: 13px; color: #636363; white-space: nowrap; }
+      .row label small { color: #c2c2c2; }
       .row input {
         flex: 1; min-width: 0; padding: 5px 8px;
-        border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px;
+        border: 1px solid #c2c2c2; border-radius: 4px; font-size: 13px;
       }
       .row .pick {
-        flex: 0 0 auto; padding: 5px 9px; font-size: 11px; cursor: pointer;
-        border: 1px solid #d1d5db; background: #f8f9fa; border-radius: 6px; color: #1a1a2e;
+        flex: 0 0 auto; padding: 5px 9px; font-size: 12px; cursor: pointer;
+        border: 1px solid #c2c2c2; background: #f7f7f7; border-radius: 4px; color: #1a1a1a;
       }
-      .row .pick:hover { background: #eef2f7; }
-      .sel { font-size: 10px; color: #9ca3af; margin: 0 0 9px 78px; word-break: break-all; }
-      .sel b { color: #16a34a; font-weight: 600; }
-      .status { font-size: 11px; min-height: 14px; margin: 2px 0 8px; color: #6b7280; }
+      .row .pick:hover { background: #f0f0f0; }
+      .sel { font-size: 11px; color: #636363; margin: 0 0 9px 98px; word-break: break-all; }
+      .sel b { color: #024ad8; font-weight: 600; }
+      .status { font-size: 11px; min-height: 14px; margin: 2px 0 8px; color: #636363; }
       .ft { display: flex; gap: 6px; }
       .ft button {
-        flex: 1; padding: 7px; border-radius: 7px; font-size: 13px; font-weight: 600;
+        flex: 1; padding: 7px; border-radius: 4px; font-size: 13px; font-weight: 600;
         cursor: pointer; border: 1px solid transparent;
       }
-      .save { background: #2383e2; color: #fff; }
-      .save:hover { background: #1a72c8; }
-      .cancel { background: #fff; color: #374151; border-color: #d1d5db; }
-      .cancel:hover { background: #f8f9fa; }
+      .save { background: #024ad8; color: #fff; }
+      .save:hover { background: #0e3191; }
+      .cancel { background: #fff; color: #3d3d3d; border-color: #c2c2c2; }
+      .cancel:hover { background: #f7f7f7; }
     </style>
     <div class="panel">
       <div class="hd">
@@ -268,9 +268,9 @@
     if (!panelShadow) return;
     const el = panelShadow.querySelector('.status');
     el.textContent = text;
-    el.style.color = kind === 'ok' ? '#16a34a'
-      : kind === 'err' ? '#dc2626'
-      : kind === 'pick' ? '#2383e2' : '#6b7280';
+    el.style.color = kind === 'ok' ? '#024ad8'
+      : kind === 'err' ? '#b3262b'
+      : kind === 'pick' ? '#024ad8' : '#636363';
   }
 
   async function savePanel() {
@@ -347,7 +347,7 @@
     highlightBox.id = HIGHLIGHT_ID;
     highlightBox.style.cssText =
       'position:fixed;z-index:2147483646;pointer-events:none;display:none;' +
-      'background:rgba(35,131,226,0.18);border:2px solid #2383e2;border-radius:2px;' +
+      'background:rgba(2,74,216,0.16);border:2px solid #024ad8;border-radius:2px;' +
       'box-shadow:0 0 0 1px rgba(255,255,255,0.5);';
     document.documentElement.appendChild(highlightBox);
 
@@ -408,11 +408,11 @@
             padding: 10px 18px; border-radius: 10px;
             font-family: -apple-system, 'Malgun Gothic', sans-serif; font-size: 13px;
             color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,0.28);
-            background: #1a1a2e;
+            background: #1a1a1a;
           }
-          .toast.info  { background: #2563eb; }
+          .toast.info  { background: #024ad8; }
           .toast.warn  { background: #b45309; }
-          .toast.error { background: #b91c1c; }
+          .toast.error { background: #b3262b; }
         </style>
         <div class="toast"></div>
       `;

@@ -146,19 +146,19 @@ function createRecordingBar() {
       .bar {
         position: fixed; top: 0; left: 50%; transform: translateX(-50%);
         z-index: 2147483647;
-        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        background: linear-gradient(135deg, #ff5050, #b3262b);
         color: white;
         padding: 10px 24px;
         border-radius: 0 0 14px 14px;
         display: flex; align-items: center; gap: 14px;
         font-family: -apple-system, 'Malgun Gothic', sans-serif;
         font-size: 13px;
-        box-shadow: 0 4px 20px rgba(220,38,38,0.4);
+        box-shadow: 0 4px 20px rgba(179,38,43,0.4);
         user-select: none;
       }
       .dot {
         width: 10px; height: 10px;
-        background: #fca5a5;
+        background: #f9d4d2;
         border-radius: 50%;
         animation: blink 1s ease-in-out infinite;
       }
@@ -172,21 +172,21 @@ function createRecordingBar() {
         font-size: 12px;
       }
       .stop-btn {
-        background: white; color: #dc2626;
+        background: white; color: #b3262b;
         border: none; padding: 5px 16px;
-        border-radius: 8px; font-size: 12px;
+        border-radius: 4px; font-size: 12px;
         font-weight: 700; cursor: pointer;
         transition: background 0.15s;
       }
-      .stop-btn:hover { background: #fee2e2; }
+      .stop-btn:hover { background: #fff0f0; }
       .assert-btn {
         background: rgba(255,255,255,0.18); color: #fff;
         border: 1px solid rgba(255,255,255,0.45); padding: 5px 14px;
-        border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+        border-radius: 4px; font-size: 12px; font-weight: 700; cursor: pointer;
         transition: background 0.15s;
       }
       .assert-btn:hover { background: rgba(255,255,255,0.32); }
-      .assert-btn.active { background: #fff; color: #16a34a; border-color: #fff; }
+      .assert-btn.active { background: #fff; color: #024ad8; border-color: #fff; }
     </style>
     <div class="bar">
       <div class="dot"></div>
@@ -234,7 +234,7 @@ function startAssertPick() {
   highlightBox.id = 'uniflow-assert-highlight';
   highlightBox.style.cssText =
     'position:fixed;z-index:2147483646;pointer-events:none;display:none;' +
-    'background:rgba(35,131,226,0.18);border:2px solid #2383e2;border-radius:2px;' +
+    'background:rgba(2,74,216,0.16);border:2px solid #024ad8;border-radius:2px;' +
     'box-shadow:0 0 0 1px rgba(255,255,255,0.5);';
   document.documentElement.appendChild(highlightBox);
 
@@ -300,18 +300,18 @@ function showTypeMenu(x, y, el) {
       :host { all: initial; }
       .menu {
         position: fixed; z-index: 2147483647; min-width: 210px;
-        background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+        background: #fff; border: 1px solid #e8e8e8; border-radius: 10px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.25); padding: 6px;
         font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
       }
-      .head { font-size: 11px; color: #9ca3af; padding: 5px 9px 7px; }
+      .head { font-size: 11px; color: #636363; padding: 5px 9px 7px; }
       button {
         display: block; width: 100%; text-align: left; border: none; background: none;
-        padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #1a1a2e;
+        padding: 8px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; color: #1a1a1a;
       }
-      button:hover { background: #eff6ff; }
-      button small { display: block; color: #9ca3af; font-size: 11px; margin-top: 1px; }
-      .cancel { color: #dc2626; border-top: 1px solid #f3f4f6; margin-top: 4px; }
+      button:hover { background: #eef3fd; }
+      button small { display: block; color: #636363; font-size: 11px; margin-top: 1px; }
+      .cancel { color: #b3262b; border-top: 1px solid #e8e8e8; margin-top: 4px; }
     </style>
     <div class="menu">
       <div class="head">이 요소를 어떻게 검증할까요?</div>

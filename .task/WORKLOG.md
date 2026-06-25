@@ -13,6 +13,39 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-06-24 — HP 디자인 전 화면 통일 (editor·F3 모달·녹화 바·F2 패널·popup.js)
+- "한 번에 전부 통일" 결정에 따라 남은 모든 화면을 HP 토큰(design.md)으로 맞춤. popup과 동일 팔레트(primary #024ad8, ink #1a1a1a, cloud #f7f7f7, hairline #e8e8e8, steel #c2c2c2, danger #ff5050·#b3262b), 버튼 4px + letter-spacing
+- editor.html: `:root` 토큰 + Manrope `@font-face`(`../popup/fonts/`), 헤더·코드패널을 ink 슬랩, 코드 타이틀 bright-blue(#296ef9), 카드/번호뱃지/입력/태그 토큰화
+- userSwitch.js(F3 모달): 헤더·도메인칩·링크·테이블·메시지색 HP로, 입력/닫기버튼 4px
+- content.js: 녹화 바 빨강→coral(#ff5050→#b3262b)·버튼 4px·assert-active 초록→HP블루, 인스펙터 하이라이트 #2383e2→#024ad8, 검증 유형 메뉴 토큰화
+- autoLogin.js(F2 패널): 패널 회색/보더/입력 4px·녹색강조→HP블루, 토스트(ink/HP블루/bloom-deep)·상태색·자체 피커 하이라이트까지
+- popup.js: 동적 콘텐츠 인라인색을 토큰으로(muted→--text-3, 강조→--accent, 삭제/오류→--danger-deep, 성공→--accent)
+- 콘텐츠 스크립트(F2/F3/녹화바)는 한글 위주라 Manrope 미적용(시스템 폴백) — 색·형태만 통일. Manrope는 확장 페이지(popup·editor)만
+- 예외: editor "복사됨" 피드백은 파란 버튼 대비 위해 초록(#059669) 유지
+- 검증: 4개 JS `node --check` 통과, 구palette 잔여 0, editor·F3 모달·녹화 바를 로컬 렌더로 육안 확인. 미커밋
+
+### 2026-06-24 — F2 등록 패널 UI 보정 (너비·라벨 줄바꿈·HP블루)
+- 패널이 좁고(340px) "로그아웃 (선택)" 라벨이 라벨칸(72px)을 초과해 줄바꿈되던 문제
+- 너비 340→384px, 라벨칸 72→92px + `white-space:nowrap`, `.sel` 좌여백 78→98px 정렬, 라벨/입력/요소선택 버튼 폰트 1px씩 상향(가독성)
+- 저장 버튼·도메인 칩 파랑을 popup과 동일한 HP 블루(#024ad8·#0e3191)로 통일 (패널 전체 토큰화는 후속)
+- 검증: 패널 마크업을 임시 HTML로 렌더 → "로그아웃 (선택)" 한 줄 표시·넓어진 폭 육안 확인 (autoLogin.js, 미커밋)
+
+### 2026-06-24 — F2·F3를 등록된 도메인에서만 동작 (미등록은 무음 무시)
+- 요청: F2 자동로그인 / F3 사용자 전환을 등록된 도메인에서만 동작시키고, 미등록 도메인에선 완전 무음 무시(토스트·모달 없음)
+- F3(userSwitch.js): 기존엔 토큰 등록 여부와 무관하게 어느 사이트에서나 모달이 열렸음 → `showModal()` 진입 시 `getDomainToken()`을 먼저 조회해 토큰 없으면 모달을 만들지 않고 return. 기존 "토큰 없음" 경고 분기는 가드로 죽어 제거
+- F2(autoLogin.js): `handleF2()`는 이미 설정 없으면 return했으나 안내 토스트를 띄웠음 → 토스트 제거하고 무음 return (등록 패널의 요소 선택 취소 등 패널 동작은 유지)
+- "등록" 기준: F2=`domainAutoLogin[host]`, F3=`domainTokens[host]`
+- 검증: 두 파일 `node --check` 통과, showToast/showMsg 잔여 참조 정상. CLAUDE.md F2·F3 설명 갱신. 미커밋
+
+### 2026-06-24 — popup에 HP 디자인 시스템(design.md) 1차 적용
+- 어제 준비만 해둔 `design.md`(HP 디자인 시스템 스펙)·`src/popup/fonts/`(Manrope woff2 400/500/600/700)를 실제 코드에 연결 — 직전까지 스펙·폰트만 받아두고 코드 미반영 상태였음
+- popup.html: `@font-face`로 Manrope 4종 연결, body 폰트 `Manrope` 우선(한글은 Malgun Gothic 폴백 유지)
+- `:root` 토큰값을 HP 팔레트로 매핑(토큰명은 유지) — ink/charcoal/graphite(#1a1a1a·#3d3d3d·#636363), canvas #fff, cloud #f7f7f7, hairline #e8e8e8, steel #c2c2c2, primary=HP Electric Blue #024ad8(pressed #0e3191·soft #c9e0fc), danger=bloom-coral #ff5050(#b3262b)
+- 버튼: radius 4px(rounded.md)·letter-spacing 0.3px, primary hover→pressed blue, 녹화/초기화·녹화상태 바를 coral 계열로, "복사됨" 확인을 팔레트 내 blue로
+- 설정 탭 인라인 하드코딩(회색·코드칩 배경·입력 radius 8px→4px)을 토큰으로 치환
+- 검증: 로컬 HTTP로 popup 렌더 → Manrope 로드 true, primary 버튼 배경 rgb(2,74,216)=#024ad8, radius 4px 확인 + 추출/설정 탭 스크린샷 육안 확인
+- 범위 밖(후속): editor·F3 모달(userSwitch.js)·녹화 바(content.js)·popup.js 동적 의미색(상태 빨강/초록, 링크 blue) — BACKLOG 참고. 미커밋
+
 ### 2026-06-23 — F2 로그인 상태 판정 방식 변경 (로그인 폼 기준)
 - 기존: "로그아웃 버튼이 보이면 로그인 상태"로 역추론 → 로그아웃 버튼은 선택 등록이라 미등록 시 토글 불가, 단일 신호 의존
 - 변경: **로그인 폼(아이디·비번 입력칸) 가시성**을 1차 신호로. 폼이 보이면 로그인 전→자동로그인, 안 보이면 로그인 상태→로그아웃 버튼 클릭. 폼·로그아웃 버튼 모두 못 찾으면 셀렉터 점검 토스트로 중단(무작정 동작 안 함)
