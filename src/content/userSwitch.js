@@ -302,6 +302,10 @@
   async function showModal() {
     if (document.getElementById(MODAL_ID)) return;
 
+    // 등록 도메인만: API 토큰이 없으면 무음으로 무시 (모달을 만들지 않음)
+    currentToken = await getDomainToken();
+    if (!currentToken) return;
+
     const host = document.createElement('div');
     host.id = MODAL_ID;
     shadowRoot = host.attachShadow({ mode: 'open' });
@@ -318,11 +322,7 @@
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
     shadowRoot.querySelector('.search').addEventListener('input', renderTables);
 
-    // 도메인별 토큰 조회
-    currentToken = await getDomainToken();
-    if (!currentToken) {
-      showMsg(`이 도메인(${location.hostname})에 등록된 API 토큰이 없습니다. 목록 조회는 가능하지만, 사용자 전환은 확장 팝업 → 설정 탭에서 토큰을 등록해야 동작합니다.`, 'warn');
-    } else if (currentToken.label) {
+    if (currentToken.label) {
       showMsg(`적용 토큰: ${currentToken.label}`, 'info');
     }
 

@@ -86,10 +86,7 @@
   // (로그아웃 버튼의 존재로 로그인 상태를 역추론하던 방식보다, 항상 등록되는 로그인 폼을 기준으로 판정)
   async function handleF2() {
     const cfg = await getConfig();
-    if (!cfg) {
-      showToast('이 도메인 자동로그인 설정이 없습니다. 확장 팝업 → 설정 탭에서 등록 패널을 여세요.', 'warn');
-      return;
-    }
+    if (!cfg) return; // 미등록 도메인: 무음으로 무시 (등록은 팝업 설정 탭의 등록 패널에서)
 
     const idEl = queryOne(cfg.idSel);
     const pwEl = queryOne(cfg.pwSel);
