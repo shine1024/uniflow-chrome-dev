@@ -5,7 +5,9 @@
 let recordingBar = null;
 let clickHandler = null;
 let inputHandler = null;
+let keyHandler = null;
 const pendingInputs = new Map(); // 디바운스 대기 중인 입력 (selector -> {timer, commit})
+const lastCommitted = new Map(); // selector -> 마지막 커밋 시그니처 (동일 값 중복 스텝 방지)
 let assertMode = false;       // 검증 요소 선택 모드 활성
 let assertStage = null;       // 'pick'(요소 선택) | 'type'(유형 선택)
 let assertHover = null;       // 현재 하이라이트된 요소
@@ -15,19 +17,34 @@ let typeMenuHost = null;      // 검증 유형 선택 메뉴 (Shadow DOM)
 let pickCursorStyle = null;   // 선택 모드 커서
 
 // ---- 셀렉터 생성 ----
+function isUniqueSelector(sel) {
+  try { return document.querySelectorAll(sel).length === 1; }
+  catch (e) { return false; }
+}
+
+// id 셀렉터 형태 — 깔끔한 식별자는 #id, 숫자로 시작하거나 특수문자를 포함하면
+// [id="..."] 로 (codegen 스타일, CSS.escape 의 읽기 나쁜 "\35 " 형태 회피)
+function idSelector(id) {
+  return /^[A-Za-z_][\w-]*$/.test(id) ? '#' + id : '[id="' + id.replace(/["\\]/g, '\\$&') + '"]';
+}
+
 function getSelector(el) {
   if (!el || el === document.body || el === document.documentElement) return 'body';
   const elId = el.getAttribute('id');
-  if (elId) return '#' + CSS.escape(elId);
+  if (elId) { const s = idSelector(elId); if (isUniqueSelector(s)) return s; }
 
   const parts = [];
   let current = el;
-  while (current && current !== document.body && parts.length < 4) {
+  while (current && current !== document.body && parts.length < 6) {
     let selector = current.tagName.toLowerCase();
 
+    // 유일한 id 를 만나면 강한 앵커로 사용 (경로까지 합쳐 유일하면 확정)
     const curId = current.getAttribute('id');
-    if (curId) {
-      parts.unshift('#' + CSS.escape(curId));
+    const curIdSel = curId ? idSelector(curId) : '';
+    if (curIdSel && isUniqueSelector(curIdSel)) {
+      const anchored = [curIdSel].concat(parts).join(' > ');
+      if (isUniqueSelector(anchored)) return anchored;
+      parts.unshift(curIdSel);
       break;
     }
 
@@ -54,9 +71,245 @@ function getSelector(el) {
 
     parts.unshift(selector);
     current = current.parentElement;
+
+    // 유일해지면 조기 종료 — 불필요하게 길고 취약한 셀렉터 방지
+    if (isUniqueSelector(parts.join(' > '))) return parts.join(' > ');
   }
 
   return parts.join(' > ');
+}
+
+// ---- 로케이터 후보 수집 (셀렉터 보강) ----
+// 재생 시 Playwright 가 안정적 로케이터를 고르도록, 녹화 시점에 여러 후보 속성을 함께 저장한다.
+function collectLocator(el) {
+  if (!el || el.nodeType !== 1) return {};
+  const attr = (n) => (el.getAttribute(n) || '').trim();
+  const id = attr('id');
+  const base = {
+    testid: attr('data-testid') || attr('data-test') || attr('data-qa') || attr('data-cy'),
+    name: attr('name'),
+    placeholder: attr('placeholder'),
+    ariaLabel: attr('aria-label'),
+    role: attr('role'),
+    idStable: !!id && isStableId(id)
+  };
+  const choice = chooseLocatorStrategy(el, base);   // 전략과 함께 "필요할 때만" 스코프를 결정
+  base.locatorStrategy = choice.strategy;
+  base.scope = choice.scope;
+  if (choice.nameExact === false) base.nameExact = false;   // role 이름에 아이콘 글리프 섞임 → 편집기에서 exact 생략
+  return base;
+}
+
+// id 가 페이지에서 유일하고 자동생성(난수·긴 숫자) 패턴이 아니면 안정적이라 본다.
+function isStableId(id) {
+  try {
+    if (document.querySelectorAll('#' + CSS.escape(id)).length !== 1) return false;
+  } catch (e) { return false; }
+  if (/^\d/.test(id)) return false;           // 숫자로 시작
+  if (/[0-9a-f]{8,}/i.test(id)) return false; // 해시성 연속 hex
+  if (/\d{4,}/.test(id)) return false;        // 긴 숫자 시퀀스
+  return true;
+}
+
+// 스코프 앵커로 쓸 만한 id 인지 — 안정 조건에 더해 의미 있는 형태만(너무 짧거나
+// 이상한 문자를 포함한 프레임워크 자동생성 id, 예: "R", "[object HTMLInputElement]" 배제)
+function isGoodScopeId(id) {
+  if (!id || id.length < 3) return false;
+  if (!/^[A-Za-z][\w-]*$/.test(id)) return false;
+  return isStableId(id);
+}
+
+// 텍스트/role 로 요소를 찾을 때 같은 텍스트가 여러 곳에 있어도 의도한 영역에서만 찾도록,
+// 가장 가까운 "쓸 만한" id 조상을 영역 앵커로 수집한다.
+function findScopeAnchor(el) {
+  let cur = el.parentElement;
+  let hops = 0;
+  while (cur && cur !== document.body && cur !== document.documentElement && hops < 8) {
+    const id = cur.getAttribute('id');
+    if (id && isGoodScopeId(id)) return '#' + CSS.escape(id);
+    cur = cur.parentElement;
+    hops++;
+  }
+  return '';
+}
+
+// ---- 로케이터 자동 판별 (녹화 시점, 실제 DOM 기준) ----
+// 각 후보 로케이터를 라이브 DOM 에 맞춰보고, 클릭된 요소에 정확히(유일·보임) 걸리는
+// 가장 읽기 좋은 전략을 고른다. 어느 것도 검증되지 않으면 유일성이 보장된 CSS 로 폴백.
+// 이렇게 하면 getByText 가 실제로는 0개/여러 개인 경우를 확장이 그 자리에서 걸러낸다.
+const ROLE_SCAN = {
+  button: 'button, [role=button], input[type=button], input[type=submit], input[type=reset]',
+  link: 'a[href], [role=link]',
+  checkbox: 'input[type=checkbox], [role=checkbox]',
+  radio: 'input[type=radio], [role=radio]',
+  tab: '[role=tab]',
+  menuitem: '[role=menuitem]'
+};
+
+function normText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+
+function isElVisible(el) {
+  if (!el || !el.isConnected) return false;
+  const st = getComputedStyle(el);
+  if (st.visibility === 'hidden' || st.visibility === 'collapse' || st.display === 'none') return false;
+  return el.getClientRects().length > 0;
+}
+
+function isAriaHidden(el) {
+  let cur = el;
+  while (cur && cur.nodeType === 1) {
+    if (cur.getAttribute('aria-hidden') === 'true') return true;
+    cur = cur.parentElement;
+  }
+  return false;
+}
+
+function cssQuote(v) { return '"' + String(v).replace(/["\\]/g, '\\$&') + '"'; }
+
+function uniqueHits(sel, el) {
+  try { const n = document.querySelectorAll(sel); return n.length === 1 && n[0] === el; }
+  catch (e) { return false; }
+}
+
+// Playwright getByRole 이 인식하는 역할(암시적/명시적) 근사
+function liveRole(el) {
+  const explicit = (el.getAttribute('role') || '').trim();
+  if (explicit) return explicit;
+  const t = el.tagName.toLowerCase();
+  if (t === 'a') return el.hasAttribute('href') ? 'link' : null;
+  if (t === 'button') return 'button';
+  if (t === 'input') {
+    const it = (el.getAttribute('type') || '').toLowerCase();
+    if (it === 'submit' || it === 'button' || it === 'reset') return 'button';
+    if (it === 'checkbox') return 'checkbox';
+    if (it === 'radio') return 'radio';
+  }
+  return null;
+}
+
+// 접근 이름 근사 (aria-label → aria-labelledby → 연결 label → 텍스트/placeholder/title)
+function accessibleName(el) {
+  const al = el.getAttribute('aria-label');
+  if (al) return al;
+  const lb = el.getAttribute('aria-labelledby');
+  if (lb) {
+    const ref = document.getElementById(lb);
+    if (ref) return ref.textContent;
+  }
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    const id = el.getAttribute('id');
+    if (id) {
+      let lab = null;
+      try { lab = document.querySelector('label[for=' + cssQuote(id) + ']'); } catch (e) { lab = null; }
+      if (lab) return lab.textContent;
+    }
+    const wrap = el.closest('label');
+    if (wrap) return wrap.textContent;
+    return el.getAttribute('placeholder') || '';
+  }
+  return el.textContent || el.getAttribute('title') || '';
+}
+
+// Playwright getByText 근사: 텍스트가 일치하는 "가장 작은" 요소들
+function emulateGetByText(root, text, exact) {
+  const t = normText(text);
+  if (!t) return [];
+  const out = [];
+  const list = root.querySelectorAll('*');
+  for (const el of list) {
+    const own = normText(el.textContent);
+    const hit = exact ? own === t : own.indexOf(t) !== -1;
+    if (!hit) continue;
+    let childHit = false;
+    for (const c of el.children) {
+      const ct = normText(c.textContent);
+      if (exact ? ct === t : ct.indexOf(t) !== -1) { childHit = true; break; }
+    }
+    if (!childHit) out.push(el);
+  }
+  return out;
+}
+
+// 요소의 접근 이름에 아이콘 폰트 글리프(::before/::after 생성 콘텐츠)가 섞이는지.
+// 섞이면 Playwright 가 계산하는 실제 접근 이름에 비공백 글리프가 들어가 exact 매칭이 깨진다
+// (예: fa-folder-open 의 U+E8A5). 이 경우 getByRole 은 non-exact(부분일치)로 내보내야 한다.
+function hasPseudoGlyph(el) {
+  const hit = (node) => {
+    // Playwright 접근 이름은 숨김·aria-hidden 요소를 제외한다 — 이름에 안 들어가는 글리프는 무시
+    if (!isElVisible(node) || isAriaHidden(node)) return false;
+    for (const pe of ['::before', '::after']) {
+      let c;
+      try { c = getComputedStyle(node, pe).content; } catch (e) { continue; }
+      if (!c || c === 'none' || c === 'normal') continue;
+      const s = c.replace(/^["']|["']$/g, '');
+      if (s.indexOf('url(') === 0) continue;   // 이미지 content 는 이름에 안 섞임
+      if (/\S/.test(s)) return true;            // 공백이 아닌 글리프 → 이름 오염
+    }
+    return false;
+  };
+  if (hit(el)) return true;
+  const kids = el.querySelectorAll('*');
+  const cap = Math.min(kids.length, 30);
+  for (let i = 0; i < cap; i++) if (hit(kids[i])) return true;
+  return false;
+}
+
+function roleResolvesTo(el, scopeSel, role, name, exact) {
+  const scan = ROLE_SCAN[role];
+  if (!scan) return false;
+  const root = (scopeSel && document.querySelector(scopeSel)) || document;
+  const wanted = normText(name);
+  const hits = [];
+  let list;
+  try { list = root.querySelectorAll(scan); } catch (e) { return false; }
+  for (const c of list) {
+    if (!isElVisible(c) || isAriaHidden(c)) continue;
+    const cand = normText(accessibleName(c));
+    const match = exact ? cand === wanted : cand.indexOf(wanted) !== -1;
+    if (match) hits.push(c);
+  }
+  return hits.length === 1 && (hits[0] === el || hits[0].contains(el) || el.contains(hits[0]));
+}
+
+function textResolvesTo(el, scopeSel, text) {
+  const root = (scopeSel && document.querySelector(scopeSel)) || document;
+  const matches = emulateGetByText(root, text, true).filter(isElVisible);
+  if (matches.length !== 1) return false;
+  const m = matches[0];
+  return m === el || m.contains(el) || el.contains(m);
+}
+
+// 반환: { strategy, scope } — scope 는 텍스트/role 이 문서 전역에서 애매할 때만 채워진다.
+function chooseLocatorStrategy(el, m) {
+  const tag = el.tagName.toLowerCase();
+  const isForm = tag === 'input' || tag === 'textarea' || tag === 'select';
+  const text = getLabel(el);
+
+  if (m.testid && uniqueHits('[data-testid=' + cssQuote(m.testid) + ']', el)) return { strategy: 'testid', scope: '' };
+
+  const id = el.getAttribute('id');
+  if (m.idStable && id && uniqueHits('#' + CSS.escape(id), el)) return { strategy: 'id', scope: '' };
+
+  const role = liveRole(el);
+  if (role && text) {
+    const exact = !hasPseudoGlyph(el);   // 아이콘 글리프가 이름에 섞이면 exact 로는 못 잡음 → 부분일치
+    if (roleResolvesTo(el, '', role, text, exact)) return { strategy: 'role', scope: '', nameExact: exact };          // 전역 유일 → 스코프 불필요
+    const sc = findScopeAnchor(el);
+    if (sc && roleResolvesTo(el, sc, role, text, exact)) return { strategy: 'role', scope: sc, nameExact: exact };     // 영역 한정으로 유일
+  }
+
+  if (m.name && uniqueHits(tag + '[name=' + cssQuote(m.name) + ']', el)) return { strategy: 'name', scope: '' };
+
+  if (isForm && m.placeholder && uniqueHits('[placeholder=' + cssQuote(m.placeholder) + ']', el)) return { strategy: 'placeholder', scope: '' };
+
+  if (!isForm && text) {
+    if (textResolvesTo(el, '', text)) return { strategy: 'text', scope: '' };
+    const sc = findScopeAnchor(el);
+    if (sc && textResolvesTo(el, sc, text)) return { strategy: 'text', scope: sc };
+  }
+
+  return { strategy: 'css', scope: '' };                                                       // 좋은 앵커가 없으면 구체 CSS 로
 }
 
 // ---- 텍스트 라벨 추출 ----
@@ -91,19 +344,34 @@ function getLabel(el) {
   return '';
 }
 
-// ---- 클릭 대상 요소 찾기 (이벤트 target → 의미있는 상위 요소) ----
+// 체크박스/라디오(또는 그 라벨) 클릭인지 — 토글은 click 이 아니라 change 로 기록하려고 판별한다.
+function isToggleClick(el) {
+  const isCb = (n) => n && n.tagName === 'INPUT' && (n.type === 'checkbox' || n.type === 'radio');
+  if (isCb(el)) return true;
+  const label = el && el.closest ? el.closest('label') : null;
+  if (label) {
+    const ctrl = label.control || (label.htmlFor ? document.getElementById(label.htmlFor) : null) || label.querySelector('input');
+    if (isCb(ctrl)) return true;
+  }
+  return false;
+}
+
+// ---- 클릭 대상 요소 찾기 ----
+// codegen 처럼 "클릭한 정확한 요소"를 잡는다. 두 가지 예외만 둔다.
 function findClickTarget(el) {
-  // 이미 의미있는 요소면 그대로
+  // ① jstree 펼침 가능 노드는 펼침 화살표(.jstree-ocl)로 리다이렉트 — 라벨을 눌러도
+  //    선택만 되고 펼쳐지지 않으므로(펼침은 화살표/더블클릭), 재생 시 펼침이 재현되도록.
+  const node = el.closest('li.jstree-node');
+  if (node && !node.classList.contains('jstree-leaf')) {
+    const ocl = node.querySelector(':scope > .jstree-icon.jstree-ocl');
+    if (ocl) return ocl;
+  }
+
+  // ② 텍스트·아이콘이 명백한 컨트롤 안이면 그 컨트롤로 승격
   const meaningful = el.closest('a, button, [role="button"], [role="tab"], [role="menuitem"], input, select, textarea, [onclick], [data-action], [data-click]');
   if (meaningful) return meaningful;
 
-  // 텍스트가 있는 가장 가까운 요소
-  let current = el;
-  while (current && current !== document.body) {
-    const text = current.textContent?.trim();
-    if (text && text.length < 80 && text.length > 0) return current;
-    current = current.parentElement;
-  }
+  // 그 외엔 클릭한 정확한 요소 그대로 — coarse 조상으로 기어오르지 않는다(더 작은 단위 유지).
   return el;
 }
 
@@ -348,7 +616,8 @@ async function captureAssert(assertType, el) {
   else if (assertType === 'hasValue') expected = (el.value != null ? String(el.value) : '');
   await addStep({
     type: 'assert', assertType, timestamp: Date.now(),
-    selector, text, expected, url: location.href
+    selector, text, expected, url: location.href,
+    ...collectLocator(el)
   });
   setAssertMode(false);
 }
@@ -388,6 +657,14 @@ async function startRecording() {
       return;
     }
 
+    // 순수 유저 트리거만 기록 — 합성 click(폼 제출 forward·키보드 활성화 = detail 0)과
+    // 프로그램적 click(isTrusted=false)은 "결과" 이벤트이므로 제외(원인은 keydown/실클릭이 잡음).
+    if (!e.isTrusted || e.detail === 0) return;
+
+    // 체크박스·라디오 토글은 라벨/인풋 클릭(포워딩 포함)이 여러 번 잡혀 자기상쇄된다 —
+    // click 은 기록하지 않고 change 로 .setChecked(최종상태) 한 스텝만 남긴다.
+    if (isToggleClick(e.target)) return;
+
     // 클릭 직전, 대기 중인 입력을 먼저 커밋 (예: 비밀번호 입력 후 바로 로그인 클릭 → 이동)
     flushPendingInputs();
 
@@ -398,7 +675,8 @@ async function startRecording() {
       selector: getSelector(target),
       text: getLabel(target),
       tag: target.tagName.toLowerCase(),
-      url: location.href
+      url: location.href,
+      ...collectLocator(target)
     };
 
     await addStep(step);
@@ -420,10 +698,14 @@ async function startRecording() {
     const commit = () => {
       pendingInputs.delete(key);
       const inputType = el.getAttribute('type') || tag;
+      const isToggle = inputType === 'checkbox' || inputType === 'radio';
       // 테스트 목적: 비밀번호도 실제 입력값 그대로 기록(시나리오 재현 시 로그인되도록).
       // 주의 — 평문이 chrome.storage·생성 코드에 저장된다.
       const value = (el.value || '').substring(0, 100);
-      addStep({
+      const sig = isToggle ? value + '|' + (!!el.checked) : value;
+      if (lastCommitted.get(key) === sig) return; // 직전 커밋과 동일 → 중복 방지(Enter flush 직후 change 등)
+      lastCommitted.set(key, sig);
+      const step = {
         type: 'input',
         timestamp: Date.now(),
         selector: key,
@@ -431,8 +713,12 @@ async function startRecording() {
         inputType,
         value: value,
         label: getLabel(el),
-        url: location.href
-      });
+        url: location.href,
+        ...collectLocator(el)
+      };
+      // 체크박스·라디오는 fill 이 아니라 체크 상태가 동작 — 상태를 함께 저장(편집기에서 setChecked)
+      if (isToggle) step.checked = !!el.checked;
+      addStep(step);
     };
 
     if (e.type === 'change') {
@@ -442,9 +728,34 @@ async function startRecording() {
     }
   };
 
+  // keydown 핸들러 — 입력칸에서 누른 Enter(검색·제출 실행)를 press('Enter') 스텝으로.
+  // 버튼·링크의 Enter 는 click 이 이미 잡으므로 폼 필드에서만 캡처한다.
+  keyHandler = async (e) => {
+    const barHost = document.getElementById('uniflow-devtool-recording-bar');
+    if (barHost && barHost.contains(e.target)) return;
+    if (assertMode) return;
+    if (e.key !== 'Enter') return;
+    const el = e.target;
+    if ((el.tagName || '').toLowerCase() !== 'input') return; // textarea=줄바꿈, 그 외 무시
+    // Enter(원인)만 기록한다. 이로 인한 폼 제출의 합성 click(결과)은 clickHandler 가 detail=0 으로 필터하므로
+    // 이중 제출이 안 생긴다. (검색창처럼 제출 버튼 없이 JS 로 처리하는 Enter 도 동일하게 원인으로 기록)
+    flushPendingInputs(); // Enter 직전 대기 입력(예: 검색어)을 먼저 커밋
+    await addStep({
+      type: 'key',
+      key: 'Enter',
+      timestamp: Date.now(),
+      selector: getSelector(el),
+      text: getLabel(el),
+      tag: 'input',
+      url: location.href,
+      ...collectLocator(el)
+    });
+  };
+
   document.addEventListener('click', clickHandler, true);
   document.addEventListener('input', inputHandler, true);
   document.addEventListener('change', inputHandler, true);
+  document.addEventListener('keydown', keyHandler, true);
 
   // URL 변경 감지 (SPA 대응)
   setupUrlWatcher();
@@ -499,6 +810,10 @@ async function stopRecording() {
     document.removeEventListener('change', inputHandler, true);
     inputHandler = null;
   }
+  if (keyHandler) {
+    document.removeEventListener('keydown', keyHandler, true);
+    keyHandler = null;
+  }
   flushPendingInputs();
 
   if (recordingBar) {
@@ -522,6 +837,10 @@ function removeBar() {
     document.removeEventListener('input', inputHandler, true);
     document.removeEventListener('change', inputHandler, true);
     inputHandler = null;
+  }
+  if (keyHandler) {
+    document.removeEventListener('keydown', keyHandler, true);
+    keyHandler = null;
   }
   flushPendingInputs();
 }

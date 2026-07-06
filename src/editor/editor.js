@@ -37,6 +37,17 @@ function normalizeFromRaw(raw) {
       text: s.text || s.title || '',
       tag: s.tag || '',
       inputType: s.inputType || '',
+      testid: s.testid || '',
+      name: s.name || '',
+      placeholder: s.placeholder || '',
+      ariaLabel: s.ariaLabel || '',
+      role: s.role || '',
+      idStable: !!s.idStable,
+      scope: s.scope || '',
+      locatorStrategy: s.locatorStrategy || '',
+      nameExact: s.nameExact,        // role 이름 exact 여부(아이콘 글리프면 false) — 유실되면 exact:true 로 되돌아감
+      checked: s.checked,            // 체크박스·라디오 상태(setChecked)
+      key: s.key || '',              // 키 입력(Enter 등) — press() 로 생성
       value: s.value !== undefined ? s.value : '',
       url: s.url || '',
       toUrl: s.toUrl || '',
@@ -88,13 +99,14 @@ async function save() {
 }
 
 // ---- 렌더 ----
-const TYPE_LABEL = { start: '시작', navigate: '이동', click: '클릭', input: '입력', assert: '검증' };
+const TYPE_LABEL = { start: '시작', navigate: '이동', click: '클릭', input: '입력', key: '키', assert: '검증' };
 
 function targetText(s) {
   if (s.type === 'start') return s.url;
   if (s.type === 'navigate') return s.toUrl || s.url;
   if (s.type === 'click') return s.text || s.selector;
   if (s.type === 'input') return s.selector;
+  if (s.type === 'key') return (s.key || 'Enter') + (s.text || s.selector ? ' · ' + (s.text || s.selector) : '');
   if (s.type === 'assert') {
     const at = s.assertType || 'visible';
     const tgt = s.selector || s.text || '?';
@@ -187,6 +199,7 @@ function render() {
 
 // ---- Playwright 코드 생성 ----
 function tagToRole(s) {
+  if (s.role) return s.role;                 // 명시적 role 속성 우선 (녹화 시 판별과 일치)
   const t = (s.tag || '').toLowerCase();
   if (t === 'a') return 'link';
   if (t === 'button') return 'button';
@@ -199,14 +212,51 @@ function tagToRole(s) {
   return null;
 }
 
-function clickLocator(s) {
+// CSS 속성 선택자 조각 (name='userId') — 값의 작은따옴표만 이스케이프
+function cssAttr(name, val) {
+  return `${name}='${String(val).replace(/'/g, "\\'")}'`;
+}
+
+// 셀렉터 우선순위(견고성): data-testid → 안정적 #id → role+name → name 속성 → placeholder → 텍스트 → CSS 폴백
+function pickLocator(s) {
   const tag = (s.tag || '').toLowerCase();
-  // input/textarea/select 는 텍스트 콘텐츠가 없어 getByText 로 못 찾는다(placeholder 등) → 셀렉터 사용
-  if (['input', 'textarea', 'select'].includes(tag)) return `page.locator(${js(s.selector)})`;
+  const isForm = ['input', 'textarea', 'select'].includes(tag);
+  const scope = s.scope ? `page.locator(${js(s.scope)})` : 'page';
+  // 녹화 시 확장이 라이브 DOM 으로 검증해 고른 전략을 코드로 옮긴다.
+  const emit = (strategy) => {
+    switch (strategy) {
+      case 'testid': return { expr: `page.getByTestId(${js(s.testid)})`, desc: `testid=${s.testid}` };
+      case 'id': return { expr: `page.locator(${js(s.selector)})`, desc: s.selector };
+      case 'role': {
+        const role = tagToRole(s);
+        // 접근 이름에 아이콘 글리프가 섞이는 요소는 exact 가 깨지므로 부분일치로 (녹화 시 판별)
+        const nameOpt = s.nameExact === false ? `{ name: ${js(s.text)} }` : `{ name: ${js(s.text)}, exact: true }`;
+        return { expr: `${scope}.getByRole(${js(role)}, ${nameOpt})`, desc: `${role}=${s.text}` };
+      }
+      case 'name': { const sel = `${tag}[${cssAttr('name', s.name)}]`; return { expr: `page.locator(${js(sel)})`, desc: sel }; }
+      case 'placeholder': return { expr: `page.getByPlaceholder(${js(s.placeholder)})`, desc: `placeholder=${s.placeholder}` };
+      case 'text': return { expr: `${scope}.getByText(${js(s.text)}, { exact: true }).filter({ visible: true })`, desc: `text=${s.text}` };
+      case 'css': return { expr: s.selector ? `page.locator(${js(s.selector)})` : `page.locator('body')`, desc: s.selector || 'body' };
+      default: return null;
+    }
+  };
+
+  if (s.locatorStrategy) { const r = emit(s.locatorStrategy); if (r) return r; }
+
+  // 폴백 — 전략이 없을 때(구 녹화 데이터 등) 기존 휴리스틱 순서
+  if (s.testid) return emit('testid');
+  if (s.idStable && s.selector && s.selector.charAt(0) === '#') return emit('id');
   const role = tagToRole(s);
-  if (s.text && role) return `page.getByRole(${js(role)}, { name: ${js(s.text)} })`;
-  if (s.text) return `page.getByText(${js(s.text)})`;
-  return `page.locator(${js(s.selector)})`;
+  if (!isForm && role && s.text) return emit('role');
+  if (s.name) return emit('name');
+  if (isForm && s.placeholder) return emit('placeholder');
+  if (!isForm && s.text) return emit('text');
+  if (s.selector) return emit('css');
+  return { expr: `page.locator('body')`, desc: 'body' };
+}
+
+function clickLocator(s) {
+  return pickLocator(s).expr;
 }
 
 function assertLocator(s) {
@@ -229,15 +279,28 @@ function stepLine(s) {
     case 'start': return `await page.goto(${js(s.url)});`;
     case 'navigate': return `await page.waitForURL(${js(s.toUrl || s.url)});`;
     case 'click': return `await ${clickLocator(s)}.click();`;
+    case 'key': return `await ${pickLocator(s).expr}.press(${js(s.key || 'Enter')});`;
     case 'assert': return assertLine(s);
     case 'input': {
+      const it = (s.inputType || '').toLowerCase();
+      // 체크박스·라디오는 fill 이 아니라 setChecked (fill 은 Playwright 에서 에러)
+      if (it === 'checkbox' || it === 'radio') {
+        const checked = s.checked !== false; // 상태 미저장 구 데이터는 체크로 간주
+        return `await ${pickLocator(s).expr}.setChecked(${checked});`;
+      }
       const masked = s.value === '****'; // 녹화 시 마스킹된 비밀번호 (편집 전)
       const val = masked ? "process.env.PASSWORD ?? ''" : js(s.value);
       const tail = masked ? '  // TODO: 비밀번호는 환경변수(PASSWORD)로 주입' : '';
-      return `await page.fill(${js(s.selector)}, ${val});${tail}`;
+      return `await ${pickLocator(s).expr}.fill(${val});${tail}`;
     }
     default: return `// (알 수 없는 스텝: ${s.type})`;
   }
+}
+
+// 실패 시 리포트·trace 에서 어느 동작인지 즉시 지목되도록 스텝 제목을 만든다.
+function stepTitle(s, i) {
+  const label = targetText(s) || TYPE_LABEL[s.type] || s.type;
+  return `${i + 1}. ${TYPE_LABEL[s.type] || s.type} · ${label}`;
 }
 
 function toPlaywright() {
@@ -249,13 +312,18 @@ function toPlaywright() {
   const desc = descEl.value.trim();
   const L = ["import { test, expect } from '@playwright/test';", ''];
   if (desc) desc.split('\n').forEach((line) => L.push('// ' + line));
+  L.push('// 실패 시 trace·스크린샷을 남기려면 playwright.config.ts 에 아래를 추가:');
+  L.push("//   use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' }");
+  L.push('//   실패 후:  npx playwright show-trace  로 타임라인·네트워크·DOM 스냅샷 확인');
   L.push('// 로그인 세션이 필요한 화면은 storageState 등으로 인증을 먼저 구성하세요.');
   L.push(`test(${js(name)}, async ({ page }) => {`);
   steps.forEach((s, i) => {
     if (apply && i > 0 && s.gapMs > 0 && s.gapMs >= thr) {
       L.push(`  await page.waitForTimeout(${s.gapMs});`);
     }
-    L.push('  ' + stepLine(s));
+    L.push(`  await test.step(${js(stepTitle(s, i))}, async () => {`);
+    L.push(`    ${stepLine(s)}`);
+    L.push('  });');
   });
   L.push('});');
   L.push('');

@@ -13,6 +13,37 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-07-02 — 스코프 선택 개선: 쓰레기 id(#R) 배제 + 필요할 때만 스코프
+- 문제: `findScopeAnchor` 가 `#R`·`#[object HTMLInputElement]` 같은 의미 없는 유일 id를 영역 앵커로 채택 → `page.locator("#R").getByText(...)` 처럼 이상한 스코프. 또 텍스트가 전역 유일해도 무조건 스코프를 붙임
+- content.js: `isGoodScopeId(id)` 추가(길이≥3 + `^[A-Za-z][\w-]*$` + `isStableId`) → `findScopeAnchor` 가 쓸 만한 id만. `chooseLocatorStrategy` 가 `{strategy, scope}` 반환 — 텍스트/role 을 **먼저 스코프 없이** 시도해 전역 유일이면 스코프 생략, 애매할 때만 좋은 앵커로 스코프, 앵커 없으면 CSS 폴백. `collectLocator` 가 이 scope 를 사용(무조건 findScopeAnchor 제거)
+- editor 변경 없음(이미 s.scope·s.locatorStrategy 사용)
+- 검증(실제 Playwright 1.61.1): A `#R`+중복공통→`li.node:nth-of-type(1)`(css, #R 제거), B 전역유일→`getByText`(스코프X), C 진짜 필요→`#sub_content`로만 스코프, D `#R`내 유일링크→`getByRole`(스코프X). 전부 count=1·의도요소 적중
+- 후속: 재생 시 요소가 늦게 로드/트리 미전개면 여전히 타이밍 이슈일 수 있음(스코프와 별개)
+
+### 2026-07-02 — 로케이터 자동 판별(확장 내 검증형): getByText 오매칭을 녹화 시점에 차단
+- 문제: `getByText` 가 실제론 0개/여러 개인데도 생성돼 재생 실패(예: 스텝12 "공통"). 사람이 Playwright UI모드로 일일이 확인해야 했음
+- 방향: 확장은 페이지 안에서 실제 DOM을 들고 있으니 로케이터 검증에 유리 → **판별을 확장으로 이관, Playwright는 실행만**
+- content.js: `chooseLocatorStrategy(el, meta)` — 후보(testid/안정id/role/name/placeholder/영역텍스트/CSS)를 라이브 DOM에 맞춰보고 클릭요소에 정확히(유일·보임) 걸리는 **가장 읽기 좋은 전략** 채택, 안 되면 유일성 보장 CSS 폴백. 헬퍼: `liveRole`/`accessibleName`/`emulateGetByText`(가장 작은 요소)/`roleResolvesTo`/`textResolvesTo`/`isElVisible`/`isAriaHidden`/`uniqueHits`. `collectLocator` 가 `locatorStrategy` 로 저장(모든 스텝 전파)
+- editor.js: `pickLocator` 가 `s.locatorStrategy` 우선 반영(팩토리 `emit()`), 전략 없으면 기존 휴리스틱 폴백. `tagToRole` 이 명시적 role 우선. `normalizeFromRaw` 가 `locatorStrategy` 전달
+- 검증(**실제 Playwright 1.61.1** — content.js 순수함수 블록 주입 + 생성 로케이터를 실제 resolve): 목 4종 통과 — S1 중복링크→css(old role=2), S2 유일링크→role(scoped), S3 뱃지링크→role(full name), **S4 스텝12재현 roleless 중복 "공통"→css(1) / old text=2(실패했을 케이스)**. 전부 의도요소 적중
+- 메모: assert 스텝은 selector-우선 유지(미변경). 편집으로 text/selector 를 바꿔도 전략은 그대로라 해당 전략 내에서만 반영. 미커밋
+
+### 2026-07-02 — 셀렉터 유일성 확보 + 텍스트 로케이터 영역 스코프 (중복·숨김 오매칭 차단)
+- 문제: 같은 텍스트가 여러 영역·숨김 요소에 존재하면 `getByText` 가 다 잡혀 strict 위반/오클릭. CSS 셀렉터는 유일성 검증 없이 조립만 함
+- content.js: `getSelector` 에 `isUniqueSelector()` 기반 **유일성 climb** — 조립 후 `querySelectorAll(sel).length===1` 이 될 때까지 조상 추가(캡 6), 유일한 id 는 강한 앵커로. 유일해지면 조기 종료해 불필요하게 긴 셀렉터 방지
+- content.js: `findScopeAnchor(el)` 추가 — 가장 가까운 **안정(유일·비자동생성) id 조상**을 영역 앵커로 수집(hops 8). `collectLocator` 에 `scope` 로 병기 → 모든 스텝(click/input/assert)에 전파
+- editor.js: `normalizeFromRaw` 가 `scope` 전달. `pickLocator` 의 role/text 분기를 `page.locator(scope).getByRole(name, {exact:true})` / `.getByText(text, {exact:true}).filter({visible:true})` 로 — 영역 한정 + 부분일치 차단 + 숨김 배제. testid/안정id/name/placeholder 분기는 이미 구체적이라 스코프 미적용
+- 검증: `node --check` 통과. 다영역+숨김 중복 "비용정산" 목 페이지를 Playwright(MCP)로 재현 → 실제 `getSelector`/`findScopeAnchor` 주입 실행. 결과: 셀렉터 유일(1)·의도요소 적중, scope=`#gnb-menu`, **기존 텍스트매칭 3개 → 스코프+exact+visible 1개(의도요소)**. 미커밋
+- 메모: `.filter({visible:true})` 는 Playwright 1.44+ 필요. `exact:true` 는 라벨이 truncate/여분텍스트면 과엄격할 수 있어 편집기에서 텍스트 수정으로 조정 가능
+
+### 2026-07-02 — Playwright 변환 견고화: 셀렉터 다중후보 + test.step 진단
+- 재생 실패 원인이 타이밍보다 **셀렉터 취약성**이라 판단 → 방어대기 주입은 제외하고 셀렉터·에러처리 위주로 진행
+- content.js: `collectLocator(el)` 추가 — 녹화 시 `data-testid`/`name`/`placeholder`/`aria-label`/`role` + `idStable`(유일·비자동생성 id) 후보를 클릭·입력·검증 스텝에 병기. `isStableId()`로 중복/난수 id 배제
+- editor.js: `pickLocator(s)` 우선순위 `data-testid → 안정 #id → getByRole(name) → [name=] → getByPlaceholder → getByText → CSS 폴백`. 클릭·입력이 경유(검증은 사용자 편집 존중 위해 selector-우선 유지)
+- editor.js: 각 스텝을 `test.step('n. 유형 · 라벨', …)` 로 래핑 → 실패 시 리포트/trace가 스텝명으로 지목. 헤더에 `trace: 'retain-on-failure'`·`screenshot` config + `show-trace` 안내 주석
+- 검증: `content.js`·`editor.js` `node --check` 통과. 미커밋
+- 후속: 실제 UniFLOW 화면 녹화→재생으로 로케이터 적중률 육안 검증 필요
+
 ### 2026-06-24 — HP 디자인 전 화면 통일 (editor·F3 모달·녹화 바·F2 패널·popup.js)
 - "한 번에 전부 통일" 결정에 따라 남은 모든 화면을 HP 토큰(design.md)으로 맞춤. popup과 동일 팔레트(primary #024ad8, ink #1a1a1a, cloud #f7f7f7, hairline #e8e8e8, steel #c2c2c2, danger #ff5050·#b3262b), 버튼 4px + letter-spacing
 - editor.html: `:root` 토큰 + Manrope `@font-face`(`../popup/fonts/`), 헤더·코드패널을 ink 슬랩, 코드 타이틀 bright-blue(#296ef9), 카드/번호뱃지/입력/태그 토큰화

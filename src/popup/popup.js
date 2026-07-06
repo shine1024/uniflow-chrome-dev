@@ -262,6 +262,8 @@ function renderRecordResult(steps) {
     } else if (step.type === 'input') {
       const val = step.value !== undefined ? `<span class="step-text">→ "${step.value}"</span>` : '';
       html += `<li><span class="tag tag-input">입력</span>${step.selector} ${val}</li>`;
+    } else if (step.type === 'key') {
+      html += `<li><span class="tag tag-input">키</span>${step.selector} <span class="step-text">⏎ ${step.key || 'Enter'}</span></li>`;
     } else if (step.type === 'assert') {
       const a = step.assertType === 'url' ? ('URL = ' + (step.expected || ''))
         : step.assertType === 'containsText' ? ((step.selector || step.text || '') + ' ⊇ "' + (step.expected || '') + '"')
@@ -293,6 +295,8 @@ function toRecordMarkdown(steps) {
       lines.push(`${++idx}. click: ${step.selector}${text}`);
     } else if (step.type === 'input') {
       lines.push(`${++idx}. input: ${step.selector} → "${step.value}"`);
+    } else if (step.type === 'key') {
+      lines.push(`${++idx}. key: ${step.selector} press ${step.key || 'Enter'}`);
     } else if (step.type === 'assert') {
       const a = step.assertType === 'url' ? ('URL = ' + (step.expected || ''))
         : step.assertType === 'containsText' ? ((step.selector || step.text || '') + ' contains "' + (step.expected || '') + '"')
