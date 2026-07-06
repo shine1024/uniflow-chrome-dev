@@ -5,20 +5,28 @@
 **완료된 항목은 이 목록에서 제거하고 `WORKLOG.md` 에 기록한다** (할 일 → 한 일로 이동).
 
 ## 다음 세션 이어가기
-> **[2026-07-02 재개 지점] 로케이터 견고화 코드 완료·미커밋. 남은 실제 이슈: "트리 노드 클릭이 트리를 못 펼침".**
+> **[2026-07-06 재개 지점] 최우선: TinyMCE 게시판 본문 녹화·재생이 실제 확장에서 여전히 안 됨.**
 >
-> **이번 세션에 한 일(모두 미커밋):**
-> - `src/content/content.js`: ① `isUniqueSelector`+getSelector 유일성 climb ② `findScopeAnchor`+`isGoodScopeId`(쓰레기 id `#R`·`#[object...]` 배제) ③ `chooseLocatorStrategy`+검증 헬퍼들(`liveRole`/`accessibleName`/`emulateGetByText`/`roleResolvesTo`/`textResolvesTo`/`isElVisible`/`isAriaHidden`/`uniqueHits`) — 후보를 라이브 DOM에 맞춰보고 유일·보임으로 걸리는 전략 채택, 스코프는 전역에서 애매할 때만, 안 되면 CSS 폴백. `collectLocator`가 `locatorStrategy`+`scope` 저장
-> - `src/editor/editor.js`: `pickLocator`가 `locatorStrategy` 우선(팩토리 `emit()`), `tagToRole` 명시적 role 우선, `normalizeFromRaw`가 `locatorStrategy`·`scope` 전달, `test.step` 래핑, scope·exact·visible
-> - 검증: **실제 Playwright 1.61.1** + 목 페이지 다수로 교차검증 통과(유일성·스코프 선택·자동 판별·`#R` 제거). 검증 하니스는 `.playwright-mcp`(gitignore)에 만들었다 정리함
+> **현재 커밋 상태(둘 다 `main`, push 안 함):**
+> - `d1f7a53` `[보완] Playwright 로케이터 확장 내 검증·영역 스코프·유일성` — ✅ 실제 Playwright로 검증 완료(로케이터 견고화)
+> - `94cc076` `[신규] TinyMCE 리치텍스트 입력 녹화·재생 (작업중)` — ⚠️ 부품만 검증, **실제 확장 end-to-end 미검증**
 >
-> **꼭 알아둘 운영 팁(이번에 헤맨 지점):** content.js 수정 반영은 `chrome://extensions` 확장 새로고침 **+ 작업 페이지 F5** 둘 다 필요(안 그러면 옛 content.js가 열린 탭에 계속 돎). 재녹화해야 `locatorStrategy` 붙음. 편집기가 옛 저장 시나리오를 붙잡으면 "녹화에서 불러오기" 버튼으로 강제 로드.
+> **문제:** 게시판 글쓰기 TinyMCE 에디터 **본문**이 (녹화 → 생성 spec 재생) 저장 시 "본문 입력" 검증에 걸림. 사용자 환경에서 여전히 실패. (녹화가 아니라 재생/실행 경로 문제로 좁혀졌으나 실제 확장에서 미해결)
 >
-> **막힌 지점(여기서 재개):** 결재작성 화면에서 **"공통"(트리 카테고리) 클릭 → 하위 "경조금 지급 신청서"가 펼쳐져야 하는데 트리가 안 펼쳐짐.** iframe 아님(manifest에 all_frames 없음 + 녹화가 됐으므로 메인문서). 로케이터가 펼침 핸들러 요소가 아니라 텍스트만 짚었을 가능성. **다음 확인:** ① 재생이 에러(Timeout/not clickable)인지 vs 통과-무반응인지 ② "공통" 노드 outerHTML(부모+화살표/토글 아이콘 포함) ③ 빠른 정답은 `npx playwright codegen <url>`로 직접 공통 펼쳐 실제 동작 로케이터 확보. 필요 시 `findClickTarget`(content.js) 보정.
+> **지금까지 확정된 진단(재도출 불필요 — 실제 페이지에서 확인함):**
+> - 대상: TinyMCE **5.6.2**, iframe `#tinymce_ifr`, body `id=tinymce`(contenteditable), 백킹 `<textarea name="tinymce">`. 폼은 **최상위 문서**(제목 `input[name='title']`, 저장 `#btnSave` 또는 툴바 "저장").
+> - 녹화 캡처: TinyMCE는 iframe 생성 후 `doc.open/write`로 문서를 다시 써 **같은 Document 객체인데 등록 리스너가 지워짐** → ②는 `attachToFrame`를 doc 동일성으로 막지 않고 재부착 + `scanFrames` **700ms 재스캔**으로 대응. (주입 코드로 실제 페이지에서 재부착·캡처 확인)
+> - 재생: **`fill`도 `page.keyboard` 실제 키입력(실제 click 포커스 후에도)도 이 에디터에 안 들어감**(`getContent` 빈 값). **오직 `tinymce.get('tinymce').setContent(html); ed.save()`만** 백킹 textarea까지 채우고 본문검증 통과 → ② editor.js는 iframe richtext를 이 API로 생성(id는 frameSelector에서 `_ifr` 제거).
 >
-> **커밋 안 함**(사용자 요청). 검증 후 커밋 예정 메시지: `[보완] Playwright 로케이터 확장 내 검증·영역 스코프·유일성`.
+> **아직 안 풀린 것:** 부품은 다 실제 페이지에서 통했는데 **실제 확장 end-to-end(녹화→스텝 저장→생성→재생 저장)** 가 사용자 환경에서 실패. 원인 미확정 — 후보: (a) 확장 미리로드로 옛 content.js가 돎 (b) 격리월드(content script)에서의 iframe 리스너 동작이 주입(메인월드) 테스트와 다름 (c) 본문 스텝이 애초에 캡처 안 됨.
 >
-> 시나리오 편집기 1차는 **커밋·푸시 완료**, Playwright 실행까지 검증됨. 한 일 상세는 WORKLOG `2026-06-17~19` 참고.
+> **다음 스텝(사용자와 합의):** content.js에 **임시 진단 로그** 심기 — `setupFrameWatch` 실행 / `attachToFrame`가 iframe 발견 / `handleRichInput` 발동 시 `console.log`. 사용자가 확장 새로고침+F5+녹화+타이핑 → **페이지 F12 콘솔** 로그로 어디서 끊기는지 판별: 로그 전무=리로드/주입 문제 / `handleRichInput`은 뜨는데 스텝 없음=저장 경로 / 다 뜨는데 재생 실패=생성코드. 원인 잡으면 임시 로그 제거.
+>
+> **실측 정보(테스트 계정·경로):** 로그인 `demo009`/`123123` @ https://uniflow.unipost.co.kr/login → 커뮤니티(`/unicloud/view/gw-all-board-list`) → 글쓰기(`#btnWrite`) → `gw-all-board-insert`. 주의: 인서트 URL **직접 이동은 blank/로그아웃**됨(반드시 클릭 경유), SPA 클릭이 자동화에서 불안정(anchor `el.click()`로 우회), Playwright `page.keyboard`는 이 iframe에 **못 침**.
+>
+> **운영 팁:** content.js 반영은 `chrome://extensions` 새로고침 **+ 작업페이지 F5 + 재녹화** 셋 다 필요.
+>
+> **(부차) 미해결 이슈** — 로케이터 작업(`d1f7a53`, 커밋됨)의 남은 실이슈: 결재작성 "공통"(트리 카테고리) 클릭이 트리를 못 펼침(펼침 핸들러 아닌 텍스트만 짚었을 가능성). 다음확인: 재생이 에러(Timeout/not clickable)인지 vs 통과-무반응인지, "공통" 노드 outerHTML(토글 아이콘 포함), `npx playwright codegen`로 실동작 로케이터 확보 → `findClickTarget`(content.js) 보정.
 
 - [ ] (선택) **시나리오 라이브러리/관리** — 아래 "기능" 항목 참고 (현재 저장은 단일 슬롯이라 관리 기능 없음)
 - [ ] (선택) **콘텐츠 스크립트 Manrope 적용** — 현재 F2 패널/F3 모달/녹화 바는 한글 위주라 시스템 폰트 폴백. Manrope까지 통일하려면 `web_accessible_resources` + `chrome.runtime.getURL`로 폰트 주입 필요 (라틴 글자에만 효과)
