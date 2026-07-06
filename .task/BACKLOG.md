@@ -31,7 +31,7 @@
 - **data-main 속성**: 메인 JS 특정을 위한 `<script data-main="true">` 마킹 (서버 쪽)
 - **녹화 데이터 → 자연어 변환**: Claude API 후처리로 셀렉터+텍스트를 자연어 문장으로
 - **Playwright 내보내기 2차/3차** (1차 완료: 편집+gap+검증+녹화중 검증캡처+Export — 진행 문서 `001-playwright-export.md`): ~~녹화기 보강(role/accessible name/data-testid)~~ → 2026-07-02 완료(WORKLOG 참고, `iframe 경로`는 미구현), 로그인 `storageState` 가이드, 다이어그램 뷰, 시나리오 JSON import/export
-  - 남은 견고화: **iframe 경로 수집**(현재 미지원 — iframe 내부 요소는 셀렉터가 안 맞음), 클릭 시 요소의 accessible name(연결된 `<label>`) 수집으로 폼 필드 `getByRole` 정확도 향상
+  - 남은 견고화: **iframe 경로 수집** — 리치텍스트 편집기(contenteditable/TinyMCE)는 2026-07-06 지원(same-origin iframe 에 리스너 부착, `frameLocator` 생성). **남은 것**: iframe 내부의 *일반 폼 입력·클릭*은 여전히 미기록(셀렉터를 최상위 문서 기준으로 못 잡아 스킵), cross-origin iframe 은 원천 불가. 클릭 시 요소의 accessible name(연결된 `<label>`) 수집으로 폼 필드 `getByRole` 정확도 향상
 - **스크린샷 캡처**: 녹화 시점 화면 자동 캡처(captureVisibleTab) — 별도 Service Worker 필요(현재 백그라운드 없음). popup.js 에 screenshot step 렌더 코드만 잔존
 - **요소 좌표맵**: 캡처 시점 interactive 요소 rect 수집(step type "elements_map") — 스크린샷과 함께 구현
 

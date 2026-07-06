@@ -37,6 +37,7 @@ function normalizeFromRaw(raw) {
       text: s.text || s.title || '',
       tag: s.tag || '',
       inputType: s.inputType || '',
+      frameSelector: s.frameSelector || '',   // 리치텍스트(iframe) 편집 영역 — frameLocator 로 접근
       testid: s.testid || '',
       name: s.name || '',
       placeholder: s.placeholder || '',
@@ -105,7 +106,7 @@ function targetText(s) {
   if (s.type === 'start') return s.url;
   if (s.type === 'navigate') return s.toUrl || s.url;
   if (s.type === 'click') return s.text || s.selector;
-  if (s.type === 'input') return s.selector;
+  if (s.type === 'input') return (s.frameSelector ? s.frameSelector + ' › ' : '') + s.selector;
   if (s.type === 'key') return (s.key || 'Enter') + (s.text || s.selector ? ' · ' + (s.text || s.selector) : '');
   if (s.type === 'assert') {
     const at = s.assertType || 'visible';
@@ -283,6 +284,20 @@ function stepLine(s) {
     case 'assert': return assertLine(s);
     case 'input': {
       const it = (s.inputType || '').toLowerCase();
+      // 리치텍스트(contenteditable, TinyMCE 등)
+      if (it === 'richtext') {
+        // iframe 편집기(TinyMCE): fill·키입력은 에디터 모델에 반영되지 않아 저장 시 본문이 비어 검증에 걸린다.
+        // → 에디터 API 로 본문을 직접 설정한다(editorId = iframe id 에서 '_ifr' 제거).
+        if (s.frameSelector) {
+          const edId = s.frameSelector.replace(/^#/, '').replace(/_ifr$/, '');
+          const getter = edId
+            ? `window.tinymce && (window.tinymce.get(${js(edId)}) || window.tinymce.activeEditor)`
+            : 'window.tinymce && window.tinymce.activeEditor';
+          return `await page.evaluate((html) => { const ed = ${getter}; if (ed) { ed.setContent(html); ed.save(); } }, ${js(s.value)});`;
+        }
+        // inline contenteditable 은 fill 로 (프레임 없음)
+        return `await page.locator(${js(s.selector || 'body')}).fill(${js(s.value)});`;
+      }
       // 체크박스·라디오는 fill 이 아니라 setChecked (fill 은 Playwright 에서 에러)
       if (it === 'checkbox' || it === 'radio') {
         const checked = s.checked !== false; // 상태 미저장 구 데이터는 체크로 간주

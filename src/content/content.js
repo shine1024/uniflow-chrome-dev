@@ -15,6 +15,9 @@ let highlightBox = null;      // 인스펙터 하이라이트 오버레이
 let hoverMoveHandler = null;  // 하이라이트용 mousemove 핸들러
 let typeMenuHost = null;      // 검증 유형 선택 메뉴 (Shadow DOM)
 let pickCursorStyle = null;   // 선택 모드 커서
+let frameObserver = null;     // same-origin iframe 감시 (동적 생성 TinyMCE 등)
+let frameRescan = null;       // iframe 재스캔 인터벌 (doc.write 로 지워진 리스너 재부착)
+const framedDocs = [];        // input/change 리스너를 부착한 iframe 문서 (중지 시 정리)
 
 // ---- 셀렉터 생성 ----
 function isUniqueSelector(sel) {
@@ -395,6 +398,101 @@ function flushPendingInputs() {
   list.forEach((p) => { clearTimeout(p.timer); p.commit(); });
 }
 
+// ---- 리치텍스트 에디터(contenteditable) 입력 ----
+// TinyMCE 등은 편집 영역이 input/textarea 가 아니라 contenteditable(주로 iframe 내부 body)이라
+// 일반 입력 경로로는 안 잡힌다. 값은 요소 내용, iframe 안이면 frameSelector 를 병기해 재생 시 frameLocator 로 접근한다.
+const RICHTEXT_MAX = 5000;
+
+// contenteditable 이벤트는 하위 요소에서도 올라오므로 최상위 편집 호스트(주로 iframe body)를 찾는다.
+function editingHost(el) {
+  let host = el && el.nodeType === 1 ? el : (el && el.parentElement);
+  while (host && host.parentElement && host.parentElement.isContentEditable) host = host.parentElement;
+  return host;
+}
+
+function handleRichInput(el) {
+  const host = editingHost(el);
+  if (!host) return;
+  const doc = host.ownerDocument;
+  const frameEl = doc.defaultView && doc.defaultView.frameElement;   // 상위 문서의 <iframe> (최상위면 null)
+  const frameSelector = frameEl ? getSelector(frameEl) : '';         // frameEl 은 상위 문서 소속 → getSelector(전역 document) 로 정확
+  let innerSel;
+  if (host === doc.body) innerSel = 'body';
+  else if (frameEl) innerSel = host.id ? idSelector(host.id) : 'body';
+  else innerSel = getSelector(host);                                 // inline(최상위 문서) — 전역 document 기준 정확
+  const key = 'rich::' + frameSelector + '::' + innerSel;
+
+  const prev = pendingInputs.get(key);
+  if (prev) clearTimeout(prev.timer);
+
+  const commit = () => {
+    pendingInputs.delete(key);
+    const value = (host.innerText || host.textContent || '').replace(/\r\n/g, '\n').trim().substring(0, RICHTEXT_MAX);
+    if (lastCommitted.get(key) === value) return;
+    lastCommitted.set(key, value);
+    const step = {
+      type: 'input',
+      timestamp: Date.now(),
+      selector: innerSel,
+      tag: host.tagName.toLowerCase(),
+      inputType: 'richtext',
+      value: value,
+      label: (frameEl && getLabel(frameEl)) || '서식 편집기',
+      url: location.href
+    };
+    if (frameSelector) step.frameSelector = frameSelector;
+    addStep(step);
+  };
+  pendingInputs.set(key, { timer: setTimeout(commit, 500), commit });
+}
+
+// ---- same-origin iframe 감시 ----
+// iframe 내부 이벤트는 상위 문서로 버블링되지 않으므로 각 iframe 문서에 리스너를 직접 붙인다.
+// 주의: TinyMCE 등은 iframe 생성 후 doc.open/write 로 내부 문서를 다시 써서, 같은 Document 객체를
+// 유지한 채 등록된 리스너를 모두 지운다. 그래서 재부착을 doc 동일성으로 막지 않고(동일 리스너 재등록은
+// 자동 무시=중복 없음) 관찰자 + 주기 재스캔으로 다시 붙인다. cross-origin 은 접근 불가 → 조용히 건너뛴다.
+function attachToFrame(iframe) {
+  if (!inputHandler) return;
+  let doc;
+  try { doc = iframe.contentDocument; } catch (e) { return; }   // cross-origin
+  if (!doc) return;
+  doc.addEventListener('input', inputHandler, true);
+  doc.addEventListener('change', inputHandler, true);
+  if (framedDocs.indexOf(doc) === -1) framedDocs.push(doc);     // 정리용 목록(중복 방지)
+}
+
+function scanFrames() {
+  document.querySelectorAll('iframe').forEach(attachToFrame);
+}
+
+function setupFrameWatch() {
+  scanFrames();
+  frameObserver = new MutationObserver((muts) => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (!n || n.nodeType !== 1) continue;
+        if (n.tagName === 'IFRAME') attachToFrame(n);
+        else if (n.querySelectorAll) n.querySelectorAll('iframe').forEach(attachToFrame);
+      }
+    }
+  });
+  frameObserver.observe(document.documentElement, { childList: true, subtree: true });
+  // TinyMCE 등이 doc.write 로 리스너를 지운 뒤(같은 Document) 다시 붙이려면 주기 재스캔이 필요
+  frameRescan = setInterval(scanFrames, 700);
+}
+
+function teardownFrameWatch() {
+  if (frameObserver) { frameObserver.disconnect(); frameObserver = null; }
+  if (frameRescan) { clearInterval(frameRescan); frameRescan = null; }
+  framedDocs.forEach((doc) => {
+    try {
+      doc.removeEventListener('input', inputHandler, true);
+      doc.removeEventListener('change', inputHandler, true);
+    } catch (e) { /* 문서 파기됨 */ }
+  });
+  framedDocs.length = 0;
+}
+
 // ---- 녹화 바 카운트 업데이트 ----
 function updateCount(count) {
   if (!recordingBar) return;
@@ -688,8 +786,12 @@ async function startRecording() {
     if (barHost && barHost.contains(e.target)) return;
 
     const el = e.target;
+    // 리치텍스트 에디터(contenteditable, TinyMCE 등 — iframe 내부 포함)는 별도 경로로
+    if (el && el.nodeType === 1 && el.isContentEditable && e.type === 'input') { handleRichInput(el); return; }
+
     const tag = el.tagName.toLowerCase();
     if (!['input', 'textarea', 'select'].includes(tag)) return;
+    if (el.ownerDocument !== document) return;   // 서브프레임 내 일반 입력은 셀렉터를 최상위 문서 기준으로 못 잡음 → 스킵(리치텍스트만 프레임 지원)
 
     const key = getSelector(el);
     const prev = pendingInputs.get(key);
@@ -757,6 +859,9 @@ async function startRecording() {
   document.addEventListener('change', inputHandler, true);
   document.addEventListener('keydown', keyHandler, true);
 
+  // same-origin iframe(TinyMCE 등) 편집 영역에도 입력 리스너 부착
+  setupFrameWatch();
+
   // URL 변경 감지 (SPA 대응)
   setupUrlWatcher();
 }
@@ -805,6 +910,7 @@ async function stopRecording() {
     document.removeEventListener('click', clickHandler, true);
     clickHandler = null;
   }
+  teardownFrameWatch();   // inputHandler 참조로 iframe 리스너 제거 — 아래에서 null 되기 전에
   if (inputHandler) {
     document.removeEventListener('input', inputHandler, true);
     document.removeEventListener('change', inputHandler, true);
@@ -833,6 +939,7 @@ function removeBar() {
     document.removeEventListener('click', clickHandler, true);
     clickHandler = null;
   }
+  teardownFrameWatch();
   if (inputHandler) {
     document.removeEventListener('input', inputHandler, true);
     document.removeEventListener('change', inputHandler, true);

@@ -13,6 +13,20 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-07-06 — TinyMCE(리치텍스트/iframe) 입력 녹화 지원
+- 문제: 게시판 TinyMCE 에디터 입력이 녹화에 안 잡힘. 원인 둘 — ① 입력 핸들러가 `input/textarea/select` 만 통과(contenteditable 제외) ② TinyMCE classic 은 편집영역이 iframe 내부라 이벤트가 상위 문서로 안 올라오고 콘텐츠 스크립트도 그 안에 없음(이중 차단)
+- 방향: TinyMCE 하드코딩 없이 **"contenteditable + same-origin iframe" 일반 지원**. iframe 은 same-origin 이라 상위 콘텐츠 스크립트가 `contentDocument` 에 리스너 직접 부착(`all_frames` 불필요), MutationObserver + iframe `load` 로 동적 생성 대응. cross-origin 은 접근 불가라 무음 스킵
+- content.js: `handleRichInput`(편집 호스트=`editingHost`, 값=`innerText`, iframe 이면 `frameSelector` 병기, `inputType:'richtext'`), `setupFrameWatch`/`attachToFrame`/`watchFrame`/`teardownFrameWatch`(`framedDocs` 로 정리). `inputHandler` 가 contenteditable 을 라우팅, 서브프레임 일반입력은 셀렉터 신뢰불가로 스킵. start/stop/removeBar 에 감시 부착·정리 연결
+- editor.js: `richtext` 스텝을 `page.frameLocator(frameSel).locator(sel).fill(value)`(iframe) / `page.locator(sel).fill(value)`(inline) 로 생성, `normalizeFromRaw` 가 `frameSelector` 전달, `targetText` 에 frame 표시
+- 🐛 **근본 원인(실제 페이지 진단)**: 첫 구현은 실제 UniFLOW 게시판에서 본문이 여전히 안 잡혔음. Playwright MCP 로 실제 로그인→글쓰기 진입해 확인 — **TinyMCE 는 iframe 생성 후 `doc.open()/write()/close()` 로 내부 문서를 다시 쓴다. 이때 Document 객체는 그대로(sameDocObject=true)인데 등록된 이벤트 리스너가 전부 제거**된다(HTML 스펙). 최초 구현은 `framedDocs` 에 같은 doc 이 있으면 재부착을 건너뛰어, write 이후 리스너가 사라진 채 남아 입력을 못 받았음('load' 도 write 엔 안 뜸)
+- 수정: `attachToFrame` 이 doc 동일성으로 재부착을 막지 않도록(동일 리스너 재등록은 자동 무시=중복 없음) 변경 + `scanFrames` **주기 재스캔**(`setInterval` 700ms, `frameRescan`)으로 doc.write 로 지워진 리스너를 다시 붙임. 관찰자는 `watchFrame`/`load` 대신 `attachToFrame` 직접 호출로 단순화. `teardownFrameWatch` 가 인터벌도 정리
+- 검증: `node --check` 통과 + **실제 UniFLOW 게시판(로그인 demo009)** 에서 수정본 로직 주입 후 ① doc.write 재현 시 재스캔이 재부착해 입력 캡처(수정 전 0 → 후 1) ② 실제 `#tinymce_ifr` 에디터에 `execCommand('insertText')` **네이티브 타이핑** → richtext 스텝(`selector=body`·`frameSelector=#tinymce_ifr`·`value`=입력본문) 정확 캡처. 목 페이지 검증도 통과(백킹 textarea 간섭 없음, 생성 로케이터가 유일 contenteditable body 적중)
+- 🐛 **재생(생성 spec) 문제 — 실제 UniFLOW 진단**: 녹화는 되는데 생성된 `frameLocator('#tinymce_ifr').locator('body').fill(값)` 이 **에디터에 값을 못 넣어** 저장 시 "본문 입력" 검증이 뜸. Playwright MCP 로 실제 로그인→글쓰기 진입해 검증: **`fill` 도 `page.keyboard` 실제 키 입력(실제 click 포커스 후에도)도 이 TinyMCE(5.6.2, iframe)에 안 들어감**(getContent 계속 빈 값). 반면 **`tinymce.get('tinymce').setContent(html); ed.save()` 는 백킹 `<textarea name=tinymce>` 까지 채움**(검증 통과). 원인: TinyMCE 는 iframe body 직접 조작/외부 키입력을 자체 모델에 반영하지 않음
+- 수정(editor.js): iframe 리치텍스트 스텝을 **에디터 API 로 생성** — `await page.evaluate((html)=>{ const ed = window.tinymce && (window.tinymce.get('<id>')||window.tinymce.activeEditor); if(ed){ ed.setContent(html); ed.save(); } }, 값)`. `<id>` 는 frameSelector(`#tinymce_ifr`)에서 `_ifr` 제거해 도출. inline(프레임 없음)은 `fill` 유지
+- 검증: `node --check` 통과 + **실제 페이지에서 setContent+save 로 제목·본문 넣고 저장 시 본문 검증 안 뜸**(fill/키입력은 body 빈 채로 남음 재현). 생성 코드 문자열이 실제로 통한 형태와 일치 확인
+- 한계: **재생은 TinyMCE 전용**(iframe 리치텍스트는 `window.tinymce` 가정). cross-origin iframe·서식(HTML)은 불가, 텍스트만, 5000자 캡. 미커밋
+- 후속: 사용자가 확장 새로고침+F5 후 재녹화 → 생성 spec 재생으로 본문 저장까지 최종 확인
+
 ### 2026-07-02 — 스코프 선택 개선: 쓰레기 id(#R) 배제 + 필요할 때만 스코프
 - 문제: `findScopeAnchor` 가 `#R`·`#[object HTMLInputElement]` 같은 의미 없는 유일 id를 영역 앵커로 채택 → `page.locator("#R").getByText(...)` 처럼 이상한 스코프. 또 텍스트가 전역 유일해도 무조건 스코프를 붙임
 - content.js: `isGoodScopeId(id)` 추가(길이≥3 + `^[A-Za-z][\w-]*$` + `isStableId`) → `findScopeAnchor` 가 쓸 만한 id만. `chooseLocatorStrategy` 가 `{strategy, scope}` 반환 — 텍스트/role 을 **먼저 스코프 없이** 시도해 전역 유일이면 스코프 생략, 애매할 때만 좋은 앵커로 스코프, 앵커 없으면 CSS 폴백. `collectLocator` 가 이 scope 를 사용(무조건 findScopeAnchor 제거)
