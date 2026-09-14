@@ -43,5 +43,12 @@
 - **스크린샷 캡처**: 녹화 시점 화면 자동 캡처(captureVisibleTab) — 별도 Service Worker 필요(현재 백그라운드 없음). popup.js 에 screenshot step 렌더 코드만 잔존
 - **요소 좌표맵**: 캡처 시점 interactive 요소 rect 수집(step type "elements_map") — 스크린샷과 함께 구현
 
+## 네트워크 인지 대기 (2026-09-01 1차 완료 — WORKLOG 참고) — 후속
+- **응답 바디 수집 + assert/목킹**: netHook 은 현재 메서드·URL·상태·시각만 수집. 응답 바디까지 캡처하면 (a) 응답값 검증(`expect(resp).json()`) (b) `page.route` 로 결정론적 목킹 가능. 바디는 XHR `responseText`/fetch clone 으로 취득 — 용량·민감정보(평문) 주의
+- **navigate 스텝 네트워크 대기**: 현재 waitUrl 은 click/key 만. 전체페이지 로드(navigate)는 `waitForURL` 유지 중 — 로드 후 주요 데이터 XHR 대기까지 붙이면 더 견고(단 응답이 이미 지나가 hang 되지 않게 주의)
+- **대표요청 선택 정교화**: 현재 "창 내 가장 늦게 끝난 fetch/XHR". 폴링/하트비트가 있으면 오판 가능 — method(비-GET 우선)·요청빈도·URL 패턴 학습 등으로 개선 여지. 사용자가 카드 "API 대기" 필드로 수정/삭제 가능
+- **networkEvents 적재 배치화**: 현재 XHR 당 storage read-modify-write(=O(n²), 상한 1000). chatty 페이지 대비 메모리 버퍼+디바운스 플러시로 전환 검토(단 네비게이션 유실 방지 필요)
+- **로그인 storageState 가이드**(2차 항목과 연계): F2 자동로그인·쿠키/localStorage 를 `storageState` 로 떠 로그인 스텝 없이 재현
+
 ## 개선
 - **COMMON_PATTERNS 커스터마이징**: UniFLOW 디렉터리 구조에 맞게 공통/라이브러리 필터 패턴 조정

@@ -398,6 +398,39 @@ function flushPendingInputs() {
   list.forEach((p) => { clearTimeout(p.timer); p.commit(); });
 }
 
+// ---- 네트워크 이벤트 브리지 (MAIN world netHook → 여기 → storage) ----
+// netHook.js(MAIN)가 감시한 fetch/XHR 을 postMessage 로 받아 스텝과 같은 시계(Date.now)로
+// networkEvents 스트림에 적재한다. 편집기가 timestamp 로 액션과 상관해 waitForResponse 를 만든다.
+let netMsgHandler = null;
+let netQueue = Promise.resolve();
+const NET_MAX = 1000;   // 폴링 등으로 무한 증가 방지 (오래된 것부터 버림)
+function addNetEvent(evt) {
+  netQueue = netQueue.then(async () => {
+    const data = await chrome.storage.local.get(['networkEvents']);
+    const list = data.networkEvents || [];
+    list.push(evt);
+    if (list.length > NET_MAX) list.splice(0, list.length - NET_MAX);
+    await chrome.storage.local.set({ networkEvents: list });
+  });
+  return netQueue;
+}
+
+function startNetCapture() {
+  if (netMsgHandler) return;
+  netMsgHandler = (e) => {
+    if (e.source !== window || !e.data || e.data.source !== 'uniflow-net') return;
+    const p = e.data.payload;
+    if (p && p.url) addNetEvent(p);
+  };
+  window.addEventListener('message', netMsgHandler, false);   // enable 전에 리스너부터 등록
+  window.postMessage({ source: 'uniflow-net-ctrl', type: 'enable' }, '*');
+}
+
+function stopNetCapture() {
+  window.postMessage({ source: 'uniflow-net-ctrl', type: 'disable' }, '*');
+  if (netMsgHandler) { window.removeEventListener('message', netMsgHandler, false); netMsgHandler = null; }
+}
+
 // ---- 리치텍스트 에디터(contenteditable) 입력 ----
 // TinyMCE 등은 편집 영역이 input/textarea 가 아니라 contenteditable(주로 iframe 내부 body)이라
 // 일반 입력 경로로는 안 잡힌다. 값은 요소 내용, iframe 안이면 frameSelector 를 병기해 재생 시 frameLocator 로 접근한다.
@@ -864,6 +897,9 @@ async function startRecording() {
 
   // URL 변경 감지 (SPA 대응)
   setupUrlWatcher();
+
+  // MAIN world 네트워크 훅 활성화 (액션이 유발한 API 응답 수집)
+  startNetCapture();
 }
 
 // ---- URL 변경 감지 ----
@@ -905,6 +941,7 @@ async function checkUrlChange() {
 async function stopRecording() {
   await chrome.storage.local.set({ recording: false });
   assertMode = false; stopAssertPick();
+  stopNetCapture();
 
   if (clickHandler) {
     document.removeEventListener('click', clickHandler, true);
@@ -931,6 +968,7 @@ async function stopRecording() {
 // ---- 녹화 바 제거만 (페이지 이동 시 cleanup) ----
 function removeBar() {
   assertMode = false; stopAssertPick();
+  stopNetCapture();
   if (recordingBar) {
     recordingBar.host.remove();
     recordingBar = null;

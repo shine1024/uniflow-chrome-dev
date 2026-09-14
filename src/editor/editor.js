@@ -10,6 +10,7 @@ const nameInput = $('scenarioName');
 const descEl = $('scenarioDesc');
 const applyGapsEl = $('applyGaps');
 const gapThresholdEl = $('gapThreshold');
+const netWaitsEl = $('netWaits');
 const codeEl = $('code');
 const stepCountEl = $('stepCount');
 
@@ -24,12 +25,41 @@ const escHtml = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escAttr = (s) => escHtml(s).replace(/"/g, '&quot;');
 
+// ---- 네트워크 상관 (액션 → 유발한 API 응답) ----
+// 액션(클릭/키) 직후 다음 액션 전까지 발생한 fetch/XHR 중, UI 가 기다렸을 대표 요청을 고른다.
+// waitForResponse 는 환경(호스트)이 달라도 매칭되도록 pathname 만 저장한다.
+const NET_STATIC_RE = /\.(js|css|png|jpe?g|gif|svg|woff2?|ico|map)(\?|$)/i;
+function urlPath(u) {
+  try { return new URL(u).pathname; } catch (e) { return u || ''; }
+}
+function nextTimestamp(steps, i) {
+  for (let j = i + 1; j < steps.length; j++) if (steps[j].timestamp) return steps[j].timestamp;
+  return null;
+}
+function primaryWait(startTs, nextTs, events) {
+  if (!startTs || !events.length) return null;
+  const end = nextTs || Infinity;
+  const win = events.filter((e) => e.startedAt >= startTs && e.startedAt < end);
+  if (!win.length) return null;
+  const meaningful = win.filter((e) => !NET_STATIC_RE.test(e.url));
+  const pool = meaningful.length ? meaningful : win;
+  pool.sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0)); // 가장 늦게 끝난 = UI 가 가장 오래 기다린 요청
+  return pool[0];
+}
+
 // ---- 녹화 원본 → 편집 모델 (gap = timestamp 차이) ----
-function normalizeFromRaw(raw) {
+function normalizeFromRaw(raw, net) {
+  const steps = raw || [];
+  const events = net || [];
   let prevTs = null;
-  return (raw || []).map((s) => {
+  return steps.map((s, i) => {
     const gapMs = (prevTs != null && s.timestamp) ? Math.max(0, s.timestamp - prevTs) : 0;
     if (s.timestamp) prevTs = s.timestamp;
+    let waitUrl = s.waitUrl || '';
+    if (!waitUrl && (s.type === 'click' || s.type === 'key') && s.timestamp) {
+      const w = primaryWait(s.timestamp, nextTimestamp(steps, i), events);
+      if (w) waitUrl = urlPath(w.url);
+    }
     return {
       id: nid(),
       type: s.type,
@@ -54,6 +84,7 @@ function normalizeFromRaw(raw) {
       toUrl: s.toUrl || '',
       assertType: s.assertType || 'visible',
       expected: s.expected || '',
+      waitUrl,                       // 액션이 유발한 API 경로 — waitForResponse 로 대기(편집·삭제 가능)
       gapMs,
       enabled: true,
     };
@@ -67,7 +98,7 @@ function recordingId(steps) {
 }
 
 async function load() {
-  const data = await chrome.storage.local.get(['steps', 'scenario']);
+  const data = await chrome.storage.local.get(['steps', 'scenario', 'networkEvents']);
   const recId = recordingId(data.steps);
   const sc = data.scenario;
   const scValid = sc && Array.isArray(sc.steps) && sc.steps.length;
@@ -78,7 +109,7 @@ async function load() {
     scenario = sc;
     scenario.steps.forEach((s) => { if (!s.id) s.id = nid(); if (s.enabled === undefined) s.enabled = true; });
   } else {
-    scenario = { name: '', description: '', steps: normalizeFromRaw(data.steps), sourceRecId: recId };
+    scenario = { name: '', description: '', steps: normalizeFromRaw(data.steps, data.networkEvents), sourceRecId: recId };
   }
   nameInput.value = scenario.name || '';
   descEl.value = scenario.description || '';
@@ -86,8 +117,8 @@ async function load() {
 }
 
 async function reloadFromRecording() {
-  const data = await chrome.storage.local.get(['steps']);
-  scenario.steps = normalizeFromRaw(data.steps);
+  const data = await chrome.storage.local.get(['steps', 'networkEvents']);
+  scenario.steps = normalizeFromRaw(data.steps, data.networkEvents);
   scenario.sourceRecId = recordingId(data.steps);
   render();
 }
@@ -128,7 +159,11 @@ function fieldsHtml(s) {
     return field('URL', 'toUrl', s.toUrl || s.url);
   }
   if (s.type === 'click') {
-    return field('텍스트', 'text', s.text) + field('셀렉터', 'selector', s.selector);
+    return field('텍스트', 'text', s.text) + field('셀렉터', 'selector', s.selector) +
+      field('API 대기', 'waitUrl', s.waitUrl);
+  }
+  if (s.type === 'key') {
+    return field('셀렉터', 'selector', s.selector) + field('API 대기', 'waitUrl', s.waitUrl);
   }
   if (s.type === 'input') {
     return field('셀렉터', 'selector', s.selector) + field('값', 'value', s.value);
@@ -275,12 +310,28 @@ function assertLine(s) {
   return `await expect(${assertLocator(s)}).toBeVisible();`;
 }
 
-function stepLine(s) {
+// 액션이 유발한 API 응답을 기다리며 액션을 수행 — 응답 대기를 액션보다 먼저 걸어 경쟁을 없앤다.
+// (destructuring 없이 Promise.all — 미사용 변수 경고 방지)
+function withNetWait(action, waitUrl) {
+  return 'await Promise.all([\n' +
+    `      page.waitForResponse((r) => r.url().includes(${js(waitUrl)})),\n` +
+    `      ${action},\n` +
+    '    ]);';
+}
+
+function stepLine(s, useNet) {
+  const netWait = useNet && s.waitUrl;
   switch (s.type) {
     case 'start': return `await page.goto(${js(s.url)});`;
     case 'navigate': return `await page.waitForURL(${js(s.toUrl || s.url)});`;
-    case 'click': return `await ${clickLocator(s)}.click();`;
-    case 'key': return `await ${pickLocator(s).expr}.press(${js(s.key || 'Enter')});`;
+    case 'click': {
+      const act = `${clickLocator(s)}.click()`;
+      return netWait ? withNetWait(act, s.waitUrl) : `await ${act};`;
+    }
+    case 'key': {
+      const act = `${pickLocator(s).expr}.press(${js(s.key || 'Enter')})`;
+      return netWait ? withNetWait(act, s.waitUrl) : `await ${act};`;
+    }
     case 'assert': return assertLine(s);
     case 'input': {
       const it = (s.inputType || '').toLowerCase();
@@ -323,6 +374,9 @@ function toPlaywright() {
   const name = nameInput.value.trim() || '녹화 시나리오';
   const apply = applyGapsEl.checked;
   const thr = parseInt(gapThresholdEl.value, 10) || 0;
+  const useNet = netWaitsEl.checked;
+  // click/key 가 API 응답을 waitForResponse 로 기다리면, 그 뒤 고정 대기(gap)는 중복이라 생략한다.
+  const hasNetWait = (s) => useNet && (s.type === 'click' || s.type === 'key') && !!s.waitUrl;
 
   const desc = descEl.value.trim();
   const L = ["import { test, expect } from '@playwright/test';", ''];
@@ -333,11 +387,12 @@ function toPlaywright() {
   L.push('// 로그인 세션이 필요한 화면은 storageState 등으로 인증을 먼저 구성하세요.');
   L.push(`test(${js(name)}, async ({ page }) => {`);
   steps.forEach((s, i) => {
-    if (apply && i > 0 && s.gapMs > 0 && s.gapMs >= thr) {
+    const prev = i > 0 ? steps[i - 1] : null;
+    if (apply && prev && s.gapMs > 0 && s.gapMs >= thr && !hasNetWait(prev)) {
       L.push(`  await page.waitForTimeout(${s.gapMs});`);
     }
     L.push(`  await test.step(${js(stepTitle(s, i))}, async () => {`);
-    L.push(`    ${stepLine(s)}`);
+    L.push(`    ${stepLine(s, useNet)}`);
     L.push('  });');
   });
   L.push('});');
@@ -360,6 +415,7 @@ stepList.addEventListener('input', (e) => {
   else if (act === 'text') s.text = e.target.value;
   else if (act === 'selector') s.selector = e.target.value;
   else if (act === 'value') s.value = e.target.value;
+  else if (act === 'waitUrl') s.waitUrl = e.target.value.trim();
   else if (act === 'url') s.url = e.target.value;
   else if (act === 'toUrl') s.toUrl = e.target.value;
   else if (act === 'expected') s.expected = e.target.value;
@@ -418,6 +474,7 @@ nameInput.addEventListener('input', renderCode);
 descEl.addEventListener('input', renderCode);
 applyGapsEl.addEventListener('change', renderCode);
 gapThresholdEl.addEventListener('input', renderCode);
+netWaitsEl.addEventListener('change', renderCode);
 $('addAssertBtn').addEventListener('click', () => {
   scenario.steps.push({ id: nid(), type: 'assert', assertType: 'visible', selector: '', text: '', expected: '', gapMs: 0, enabled: true });
   render();

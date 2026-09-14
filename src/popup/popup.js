@@ -331,7 +331,7 @@ document.getElementById('recordBtn').addEventListener('click', async () => {
 
     // 초기화: 시작 페이지를 첫 step으로
     const startStep = { type: 'start', timestamp: Date.now(), url: tab.url, title: tab.title };
-    await chrome.storage.local.set({ recording: true, steps: [startStep] });
+    await chrome.storage.local.set({ recording: true, steps: [startStep], networkEvents: [] });
 
     try {
       await chrome.tabs.sendMessage(tab.id, { action: 'startRecording' });
@@ -350,7 +350,7 @@ document.getElementById('recordBtn').addEventListener('click', async () => {
 
 // 초기화
 document.getElementById('clearBtn').addEventListener('click', async () => {
-  await chrome.storage.local.set({ recording: false, steps: [] });
+  await chrome.storage.local.set({ recording: false, steps: [], networkEvents: [] });
   updateRecordUI();
 });
 

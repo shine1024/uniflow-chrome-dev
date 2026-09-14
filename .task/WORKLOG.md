@@ -13,6 +13,16 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 
 ---
 
+### 2026-09-01 — 네트워크 인지 대기(waitForResponse) — 고정 대기 대체 (A안 1차)
+- 배경: 녹화→Playwright 변환이 순탄치 않은 핵심 원인이 **`waitForTimeout` 고정 대기**(화면별 AJAX 응답시간 편차 → 느리면 실패/빠르면 낭비). 셀렉터(로케이터)는 이미 `collectLocator`로 견고. → 대기를 네트워크 기준으로 전환하는 게 최대 효과라 판단
+- 캡처: 페이지 `fetch`/`XHR` 관찰을 **MAIN world 몽키패치**로 선택(webRequest/디버거 대비 권한·배너 없음, 앱 AJAX만 잡혀 노이즈 적음. RequireJS 정적 로드는 script 태그라 자동 제외). content.js는 ISOLATED world(chrome.storage 사용)라 페이지 fetch를 못 봄 → 별도 훅 파일 필요
+- 신규 `src/content/netHook.js`(MAIN, `document_start`): `fetch`/`XHR` 래핑 → `{type,method,url,status,startedAt,endedAt}` 를 `window.postMessage`로 전달. enable 전 요청은 링버퍼(100)에 보관 후 enable 시 flush(네비게이션 직후 요청 보존). manifest에 `world:"MAIN"` content_script 등록
+- content.js: 브리지(`startNetCapture`/`stopNetCapture`/`addNetEvent`) — 훅 이벤트를 스텝과 같은 시계(`Date.now`)로 `chrome.storage.local.networkEvents`에 적재(상한 1000). start/stop/removeBar 에 연결. popup.js: 녹화 시작·초기화 시 `networkEvents` 리셋
+- editor.js: **import 시점 1회 상관**(`primaryWait` — 액션[click/key] 창 `[액션ts, 다음액션ts)` 내 fetch/XHR 중 정적자원 제외하고 가장 늦게 끝난 것) → `step.waitUrl`(pathname만, 환경 호스트 달라도 매칭)에 고정. 재정렬/삭제에도 안 깨지고 카드에서 편집·삭제 가능. 코드생성: click/key를 `Promise.all([page.waitForResponse(r=>r.url().includes(path)), 액션])`로, **그 뒤 고정 gap 대기는 억제**. 헤더 "네트워크 대기" 토글
+- 검증: 문법(node --check 4파일)·manifest JSON OK. 상관+코드생성 순수로직 재현 테스트 — 정적 `.js` 제외하고 `/api/list` 선택, waitForResponse 생성·해당 gap 억제·미대상 gap 유지 확인. **실제 확장 end-to-end(UniFLOW 사이트 녹화→재생)는 사용자 검증 필요**
+- 커밋: (미커밋)
+- 메모/후속: 응답 바디 미수집(향후 응답 assert·`page.route` 목킹 여지). 폴링 페이지는 대표요청 오판 가능 → 카드에서 수정/삭제. BACKLOG에 후속 정리
+
 ### 2026-07-06 — TinyMCE(리치텍스트/iframe) 입력 녹화 지원
 - 문제: 게시판 TinyMCE 에디터 입력이 녹화에 안 잡힘. 원인 둘 — ① 입력 핸들러가 `input/textarea/select` 만 통과(contenteditable 제외) ② TinyMCE classic 은 편집영역이 iframe 내부라 이벤트가 상위 문서로 안 올라오고 콘텐츠 스크립트도 그 안에 없음(이중 차단)
 - 방향: TinyMCE 하드코딩 없이 **"contenteditable + same-origin iframe" 일반 지원**. iframe 은 same-origin 이라 상위 콘텐츠 스크립트가 `contentDocument` 에 리스너 직접 부착(`all_frames` 불필요), MutationObserver + iframe `load` 로 동적 생성 대응. cross-origin 은 접근 불가라 무음 스킵

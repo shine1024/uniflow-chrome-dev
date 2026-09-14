@@ -167,6 +167,7 @@
     <input type="text" id="scenarioName" placeholder="테스트 이름" style="width:180px;">
     <label><input type="checkbox" id="applyGaps" checked> gap 적용</label>
     <label>≥ <input type="number" id="gapThreshold" value="300" min="0" step="100" style="width:64px;"> ms</label>
+    <label title="액션이 유발한 API 응답을 waitForResponse 로 대기 (해당 고정 대기는 생략)"><input type="checkbox" id="netWaits" checked> 네트워크 대기</label>
     <span class="spacer"></span>
     <button class="btn-ghost" id="reloadBtn" title="현재 녹화 데이터로 초기화">녹화에서 불러오기</button>
     <button class="btn-ghost" id="saveBtn">저장</button>
