@@ -572,6 +572,19 @@ document.getElementById('alOpenPanelBtn').addEventListener('click', async () => 
   }
 });
 
+// ---- 사이드바 모드 (content script iframe 으로 임베드) ----
+// ?sidebar=1 로 열리면 풀하이트 레이아웃으로 전환하고, 여기서 눌린 F4/Esc 는
+// 부모(content script)에게 닫기를 요청한다. 최상위 팝업(아이콘 클릭)에선 동작하지 않는다.
+if (new URLSearchParams(location.search).get('sidebar') === '1') {
+  document.body.classList.add('sidebar-mode');
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'F4' || e.key === 'Escape') {
+      e.preventDefault();
+      parent.postMessage({ source: 'uniflow-sidebar', type: 'close' }, '*');
+    }
+  });
+}
+
 // ---- 초기 로드 ----
 (async () => {
   await renderTokenList();

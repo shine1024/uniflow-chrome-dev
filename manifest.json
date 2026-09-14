@@ -13,17 +13,25 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["src/content/content.js", "src/content/userSwitch.js", "src/content/autoLogin.js"],
+      "js": ["src/content/content.js", "src/content/userSwitch.js", "src/content/autoLogin.js", "src/content/sidebar.js"],
       "run_at": "document_idle"
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/popup/popup.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
   "icons": {
     "16": "icons/icon_16x16.png",
     "48": "icons/icon_48x48.png",
     "128": "icons/icon_128x128.png"
   },
   "action": {
-    "default_popup": "src/popup/popup.html",
     "default_title": "UniFLOW DevTool",
     "default_icon": {
       "16": "icons/icon_16x16.png",

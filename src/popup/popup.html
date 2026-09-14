@@ -69,8 +69,12 @@
       margin-bottom: -1px;
       transition: all 0.15s;
     }
-    .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: #fff; background: var(--accent); font-weight: 700;
+      border-bottom-color: var(--accent);
+      border-radius: var(--radius-btn) var(--radius-btn) 0 0;
+    }
+    .tab:not(.active):hover { color: var(--text); background: var(--hover); }
 
     .tab-content { display: none; }
     .tab-content.active { display: block; }
@@ -184,6 +188,11 @@
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
     .btn-sheet-save { background: var(--bg-2); color: var(--text); border-color: var(--border); font-size: 13px; padding: 8px 12px; }
     .btn-sheet-save:hover { background: var(--hover); }
+
+    /* 사이드바 모드 — content script iframe 으로 임베드될 때 우측 패널 높이를 꽉 채움 */
+    body.sidebar-mode { width: 100%; height: 100vh; max-height: none; display: flex; flex-direction: column; }
+    body.sidebar-mode .tab-content.active { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+    body.sidebar-mode .result-area { flex: 1 1 auto; max-height: none; }
   </style>
 </head>
 <body>
@@ -195,7 +204,8 @@
   <div class="tabs">
     <div class="tab active" data-tab="extract">파일 추출</div>
     <div class="tab" data-tab="record">접근경로 녹화</div>
-    <div class="tab" data-tab="settings">설정</div>
+    <div class="tab" data-tab="tokens">API 토큰</div>
+    <div class="tab" data-tab="autologin">자동로그인</div>
   </div>
 
   <!-- 파일 추출 탭 -->
@@ -236,8 +246,8 @@
     </div>
   </div>
 
-  <!-- 설정 탭 -->
-  <div class="tab-content" id="tab-settings">
+  <!-- API 토큰 탭 (F3 사용자 전환) -->
+  <div class="tab-content" id="tab-tokens">
     <div class="result-area">
       <div class="section">
         <div class="section-title">도메인별 API 토큰 (F3 사용자 전환)</div>
@@ -261,8 +271,13 @@
         <div id="tokenStatus" style="font-size:13px;color:var(--text-3);margin-top:6px;min-height:16px;"></div>
         <ul class="file-list" id="tokenList" style="margin-top:6px;"></ul>
       </div>
+    </div>
+  </div>
 
-      <div class="section" style="margin-top:22px;">
+  <!-- 자동로그인 탭 (F2) -->
+  <div class="tab-content" id="tab-autologin">
+    <div class="result-area">
+      <div class="section">
         <div class="section-title">자동로그인 (F2)</div>
         <div style="font-size:13px;color:var(--text-3);margin-bottom:10px;line-height:1.6;">
           페이지에서 <code style="background:var(--bg-2);padding:1px 4px;border-radius:3px;">F2</code> 로 자동로그인/로그아웃을 토글합니다.

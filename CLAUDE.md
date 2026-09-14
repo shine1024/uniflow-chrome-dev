@@ -23,10 +23,11 @@ UniFLOW 웹시스템 화면 수정 시, Claude Code에 전달할 컨텍스트(�
 - ✅ **공통 파일 필터링**: COMMON_PATTERNS 배열 기반 (popup.js 상단), 체크박스 토글
 - ✅ **CSS 중복 제거**: 쿼리스트링(?bust=...) 무시하고 경로 기준 dedup
 - ✅ **F3 사용자 전환**: F3 키로 사용자 전환 모달(Shadow DOM, 헤더 드래그로 이동) 토글 → 사용자 목록 조회 + 즐겨찾기 + API 로그인 전환 (userSwitch.js). **토큰(`domainTokens`)이 등록된 도메인에서만 모달이 열림** — 미등록 도메인에선 무음으로 무시(토스트·모달 없음)
-- ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (설정 탭). 즐겨찾기도 도메인별 저장
-- ✅ **F2 자동로그인**: F2 키로 자동로그인/로그아웃 토글(아이디 입력→비번 입력→로그인 버튼 클릭, 로그인 폼이 안 보이면 로그아웃 버튼 클릭). 사이트마다 다른 아이디·비번 입력칸과 로그인·로그아웃 버튼을 **도메인별로 등록**(`chrome.storage.local.domainAutoLogin`). 로그인 상태는 **로그인 폼(아이디·비번 입력칸) 가시성**으로 판단 — 폼이 보이면 로그인 전으로 보고 로그인, 안 보이면 로그인된 상태로 보고 로그아웃(로그아웃 버튼의 존재로 역추론하지 않음). 등록은 페이지에 뜨는 **드래그 가능한 등록 패널**(Shadow DOM, autoLogin.js)에서 진행 — 패널이 떠 있는 채로 인스펙터식 "요소 선택"으로 셀렉터를 짚는다(content.js 하이라이트 디자인·`getSelector` 재사용). 패널 열기는 팝업 설정 탭의 버튼(설정 탭은 패널 열기 + 도메인 목록/삭제만 담당). **설정(`domainAutoLogin`)이 등록된 도메인에서만 동작** — 미등록 도메인에선 F2를 무음으로 무시. 비밀번호 평문 저장 주의
+- ✅ **도메인별 API 토큰**: F3 로그인 전환에 쓰는 clientKey를 하드코딩하지 않고 chrome.storage.local 에 도메인 단위로 등록/관리 (팝업 **API 토큰 탭**). 즐겨찾기도 도메인별 저장
+- ✅ **F2 자동로그인**: F2 키로 자동로그인/로그아웃 토글(아이디 입력→비번 입력→로그인 버튼 클릭, 로그인 폼이 안 보이면 로그아웃 버튼 클릭). 사이트마다 다른 아이디·비번 입력칸과 로그인·로그아웃 버튼을 **도메인별로 등록**(`chrome.storage.local.domainAutoLogin`, 키는 `location.host`=hostname:port — 기본포트는 생략되어 운영 도메인은 그대로, `localhost:3000`·`localhost:8080` 등 **포트별 개별 등록** 가능). 로그인 상태는 **로그인 폼(아이디·비번 입력칸) 가시성**으로 판단 — 폼이 보이면 로그인 전으로 보고 로그인, 안 보이면 로그인된 상태로 보고 로그아웃(로그아웃 버튼의 존재로 역추론하지 않음). 등록은 페이지에 뜨는 **드래그 가능한 등록 패널**(Shadow DOM, autoLogin.js)에서 진행 — 패널이 떠 있는 채로 인스펙터식 "요소 선택"으로 셀렉터를 짚는다(content.js 하이라이트 디자인·`getSelector` 재사용). 패널 열기는 팝업 **자동로그인 탭**의 버튼(이 탭은 패널 열기 + 도메인 목록/삭제만 담당). **설정(`domainAutoLogin`)이 등록된 도메인에서만 동작** — 미등록 도메인에선 F2를 무음으로 무시. 비밀번호 평문 저장 주의
 - ✅ **리치텍스트/iframe 입력 녹화**: TinyMCE 등 `contenteditable` 편집기 입력 캡처. 특정 에디터 하드코딩 없이 **same-origin iframe 에 리스너 직접 부착**(콘텐츠 스크립트가 `iframe.contentDocument` 접근, MutationObserver+`load` 로 동적 생성 대응 — `all_frames` 불필요) + contenteditable 라우팅. 스텝은 `inputType:'richtext'` + `frameSelector`(iframe) 병기. **재생 코드는 TinyMCE 의 iframe body 를 `fill`·키입력으로 못 채우므로(에디터 모델 미반영 → 저장 시 본문 검증 실패) editor 가 에디터 API 로 생성** — `page.evaluate((html)=>{ const ed=window.tinymce&&(window.tinymce.get('<id>')||window.tinymce.activeEditor); if(ed){ed.setContent(html);ed.save();} }, 값)` (`<id>`=frameSelector에서 `_ifr` 제거). inline contenteditable 은 `fill`. same-origin iframe 리스너는 TinyMCE 가 `doc.write` 로 문서를 다시 써 리스너를 지우므로 **주기 재스캔(700ms)으로 재부착**. 한계: **재생은 TinyMCE 가정**, cross-origin iframe·서식(HTML)은 미지원(텍스트만·cross-origin 은 브라우저 보안상 원천 불가), iframe 내부 *일반* 폼 입력·클릭은 미기록
 - ✅ **Playwright 내보내기 (1차)**: 녹화 시나리오를 별도 편집기 페이지(`src/editor`, 새 탭)에서 번호 타임라인 카드로 보고 → 삭제/드래그 재정렬/값·갭(`waitForTimeout`) 편집 + **검증(`expect`) 스텝**(요소 보임 / 텍스트 일치 / 텍스트 포함 / 입력값 일치 / URL 일치)으로 성공·실패 판정 → Playwright `.spec.ts` 실시간 미리보기·복사·다운로드. 검증은 편집기에서 추가하거나 **녹화 중 녹화 바 "✓ 검증 추가" → 인스펙터식 하이라이트로 요소를 짚고 클릭 → 검증 유형 메뉴에서 선택해 캡처**. 편집본은 `chrome.storage.local.scenario` 에 저장 (상세: `.task/001-playwright-export.md`)
+- ✅ **F4 사이드바**: F4 키로 페이지 우측에 개발도구 메뉴를 사이드바로 토글(F4 열림/닫힘, Esc 닫기). 콘텐츠 스크립트(`sidebar.js`)가 **Shadow DOM 호스트 + 확장 iframe(`popup.html?sidebar=1`)** 을 띄워 **팝업 UI를 그대로 재사용** — iframe 은 확장 오리진 문서라 `chrome.tabs`/`scripting`/`storage` 를 그대로 써 popup.js 로직을 별도 포팅 없이 쓴다(`web_accessible_resources` 에 popup.html 등록). 사이드바에 포커스가 있을 때의 F4/Esc 는 popup.js 가 `parent.postMessage` 로 닫기 요청. **확장 아이콘 클릭도 F4 와 동일하게 사이드바 토글** — `default_popup` 을 제거하고 `chrome.action.onClicked` 을 background service worker(`src/background.js`)가 받아 활성 탭 sidebar.js 에 `toggleSidebar` 메시지 전송(미주입 탭은 sidebar.js 주입 후 재시도). 한계: 페이지 우측 일부를 덮음, 페이지 CSP 가 확장 iframe 을 막는 극단적 사이트는 미지원
 - ✅ **네트워크 인지 대기(waitForResponse)**: 녹화 중 페이지의 `fetch`/`XHR` 을 관찰(**MAIN world 훅** `netHook.js` — content.js 는 ISOLATED world 라 페이지 fetch 를 못 봄 → `window.postMessage` 브리지)해 `chrome.storage.local.networkEvents` 에 스텝과 같은 시계로 적재. 편집기가 **import 시점에 1회 상관**(액션[click/key] 이후 다음 액션 전까지 발생한 요청 중 정적자원 제외·가장 늦게 끝난 것)해 `step.waitUrl`(pathname)에 고정 → click/key 를 `Promise.all([page.waitForResponse(r=>r.url().includes(path)), 액션])` 으로 생성하고 **그 뒤 고정 `waitForTimeout` gap 은 억제**. 편집기 헤더 "네트워크 대기" 토글, 카드 "API 대기" 필드로 경로 수정/삭제. 목적: 고정 대기(화면별 AJAX 편차로 flaky)를 결정론적 대기로 대체. 한계: 응답 바디 미수집(assert/목킹은 후속), navigate 는 기존 `waitForURL` 유지, 폴링 페이지는 대표요청 오판 가능(수동 보정)
 
 ## UI 디자인 시스템
@@ -47,13 +48,15 @@ uniflow-devtool/
   manifest.json              — Manifest V3, permissions + 진입점 경로
   icons/                     — 확장 아이콘 (16/48/128)
   src/
+    background.js           — Service Worker: 확장 아이콘 클릭(action.onClicked) → 활성 탭 사이드바 토글(F4 와 통일)
     content/
       content.js            — 페이지 inject, 녹화 바, 클릭/input/URL 이벤트 캡처
       netHook.js            — MAIN world 네트워크 훅(fetch/XHR 관찰 → postMessage). content.js 가 storage.networkEvents 로 적재 → 편집기 waitForResponse 상관
       userSwitch.js         — F3 사용자 전환 모달(Shadow DOM), 도메인별 토큰 조회 + 사용자 목록/즐겨찾기/로그인 전환 API
       autoLogin.js          — F2 자동로그인/로그아웃 + 인페이지 등록 패널(Shadow DOM, 드래그) + 요소 선택 피커(하이라이트 재사용)
+      sidebar.js            — F4 사이드바 토글(Shadow DOM, 페이지 우측). 내부는 확장 iframe 으로 popup.html?sidebar=1 을 실어 팝업 UI 재사용
     popup/
-      popup.html            — 팝업 UI (파일추출 탭 + 접근경로 녹화 탭 + 설정 탭)
+      popup.html            — 팝업 UI (파일추출 · 접근경로 녹화 · API 토큰(F3) · 자동로그인(F2) 탭)
       popup.js              — 추출 로직 + 녹화 제어 + 마크다운 변환/복사 + 도메인별 토큰 관리
     editor/
       editor.html           — 시나리오 편집기(별도 탭): 번호 카드 편집 + Playwright 미리보기/내보내기
@@ -66,9 +69,9 @@ uniflow-devtool/
   CLAUDE.md                  — 이 파일 (Claude 작업용 프로젝트 컨텍스트)
 ```
 
-> 진입점 경로 규칙: manifest.json의 `content_scripts.js`/`default_popup` 와
-> `popup.js`의 `executeScript({ files: ['src/content/content.js'] })` 는 모두 **확장 루트 기준 경로**다.
-> 소스를 옮기면 이 두 곳을 함께 갱신할 것.
+> 진입점 경로 규칙: manifest.json의 `content_scripts.js`/`background.service_worker`/`web_accessible_resources` 와
+> `popup.js`·`background.js`의 `executeScript({ files: [...] })` 는 모두 **확장 루트 기준 경로**다.
+> 소스를 옮기면 이 곳들을 함께 갱신할 것. (아이콘 클릭은 `default_popup` 없이 `action.onClicked`→background 로 처리)
 
 ## 대상 환경
 - UniFLOW: JSP + RequireJS 기반 웹시스템

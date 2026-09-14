@@ -46,13 +46,13 @@
   async function getConfig() {
     const data = await chrome.storage.local.get([AUTOLOGIN_KEY]);
     const map = data[AUTOLOGIN_KEY] || {};
-    return map[location.hostname] || null;
+    return map[location.host] || null;   // host = hostname:port (기본포트는 생략) — localhost 포트별 구분
   }
 
   async function saveConfig(entry) {
     const data = await chrome.storage.local.get([AUTOLOGIN_KEY]);
     const map = data[AUTOLOGIN_KEY] || {};
-    map[location.hostname] = entry;
+    map[location.host] = entry;
     await chrome.storage.local.set({ [AUTOLOGIN_KEY]: map });
   }
 
@@ -233,7 +233,7 @@
     panelShadow.innerHTML = PANEL_TEMPLATE;
     document.documentElement.appendChild(panelHost);
 
-    panelShadow.querySelector('.host').textContent = location.hostname;
+    panelShadow.querySelector('.host').textContent = location.host;
     panelShadow.querySelector('.in-user').value = cfg.username || '';
     panelShadow.querySelector('.in-pw').value = cfg.password || '';
     Object.keys(FIELD_LABELS).forEach(updatePanelSel);
