@@ -20,7 +20,7 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 - content.js: 브리지(`startNetCapture`/`stopNetCapture`/`addNetEvent`) — 훅 이벤트를 스텝과 같은 시계(`Date.now`)로 `chrome.storage.local.networkEvents`에 적재(상한 1000). start/stop/removeBar 에 연결. popup.js: 녹화 시작·초기화 시 `networkEvents` 리셋
 - editor.js: **import 시점 1회 상관**(`primaryWait` — 액션[click/key] 창 `[액션ts, 다음액션ts)` 내 fetch/XHR 중 정적자원 제외하고 가장 늦게 끝난 것) → `step.waitUrl`(pathname만, 환경 호스트 달라도 매칭)에 고정. 재정렬/삭제에도 안 깨지고 카드에서 편집·삭제 가능. 코드생성: click/key를 `Promise.all([page.waitForResponse(r=>r.url().includes(path)), 액션])`로, **그 뒤 고정 gap 대기는 억제**. 헤더 "네트워크 대기" 토글
 - 검증: 문법(node --check 4파일)·manifest JSON OK. 상관+코드생성 순수로직 재현 테스트 — 정적 `.js` 제외하고 `/api/list` 선택, waitForResponse 생성·해당 gap 억제·미대상 gap 유지 확인. **실제 확장 end-to-end(UniFLOW 사이트 녹화→재생)는 사용자 검증 필요**
-- 커밋: (미커밋)
+- 커밋: ce6caaf
 - 메모/후속: 응답 바디 미수집(향후 응답 assert·`page.route` 목킹 여지). 폴링 페이지는 대표요청 오판 가능 → 카드에서 수정/삭제. BACKLOG에 후속 정리
 
 ### 2026-07-06 — TinyMCE(리치텍스트/iframe) 입력 녹화 지원
