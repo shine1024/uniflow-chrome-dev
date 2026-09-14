@@ -19,14 +19,14 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 - `src/background.js`(신규): onClicked → 활성 탭에 `{action:'toggleSidebar'}` sendMessage. 콘텐츠 스크립트 미주입 탭(확장 리로드 전 열린 탭 등)은 `executeScript` 로 sidebar.js 주입 후 재시도, 주입 불가(chrome:// 등)는 무시
 - `sidebar.js`: `chrome.runtime.onMessage` 로 `toggleSidebar` 수신 → 기존 `toggleSidebar()` 호출(F4 와 동일 경로). content.js 등 다른 onMessage 리스너와 독립(액션명으로 분기)
 - 검증: `node --check`(background.js·sidebar.js)·manifest JSON OK. **실제 확장 로드 후 아이콘 클릭/F4 양쪽 토글은 사용자 검증 필요**
-- 커밋: (미커밋)
+- 커밋: 1b2b541
 
 ### 2026-09-14 — 설정 탭 분리 + 자동로그인 포트 구분 + 활성 탭 강조
 - 설정 탭 분리: 기존 "설정" 한 탭에 묶여 있던 F3(도메인별 API 토큰)·F2(자동로그인)를 **독립 탭 2개**(`API 토큰`·`자동로그인`)로 분리. popup.html 만 수정 — 탭 전환 JS 는 `#tab-${dataset.tab}` 제네릭이라 무변경(`data-tab=tokens`·`autologin`, 콘텐츠 id 대응)
 - 자동로그인 도메인 키를 `location.hostname` → **`location.host`**(hostname:port)로 변경(autoLogin.js 조회·저장·패널표시 3곳). 기본포트(80/443)는 host 에서 생략되어 운영 도메인은 기존 키와 그대로 매칭(마이그레이션 불필요), `localhost:3000`·`localhost:8080` 등 **포트별 개별 등록** 가능. popup.js 목록/삭제는 맵 키를 그대로 순회·삭제라 무변경. F3 토큰(`domainTokens`)은 요청 범위 밖이라 hostname 유지
 - 탭 스타일: 활성 탭을 **accent 배경 알약(흰 글자·굵게)** 으로 강조, 비활성은 회색+hover 배경. 기존 디자인 토큰(--accent/--hover/--radius-btn)만 사용(색 신규 없음)
 - 검증: `node --check`(autoLogin.js) OK, popup.html 4개 탭 div 중첩 균형 확인
-- 커밋: (미커밋)
+- 커밋: 1b2b541
 
 ### 2026-09-14 — F4 사이드바 (개발도구 메뉴를 페이지 우측 패널로)
 - 요구: 팝업(파일추출·녹화·설정 3탭)을 사이드바 형태로 열되 F4 로 토글(F4 열림/닫힘). 기존 아이콘 팝업은 유지
@@ -34,7 +34,7 @@ Claude와 진행한 작업의 **시간순 기록** — 최신 항목이 맨 위.
 - 신규 `src/content/sidebar.js`(ISOLATED, F2/F3 와 동일 패턴): F4 keydown 토글 + Esc 닫기, 우측 고정 Shadow DOM 호스트에 `iframe src=popup.html?sidebar=1`. 사이드바에 포커스가 있을 때 눌린 F4/Esc 는 popup.js 가 `parent.postMessage({source:'uniflow-sidebar',type:'close'})` → sidebar.js `window.message` 수신해 닫음(netHook 과 동일한 window 브리지)
 - popup.js: `?sidebar=1` 감지 시 `body.sidebar-mode` 부착 + F4/Esc → 부모에 닫기 요청(최상위 팝업에선 no-op). popup.html: `body.sidebar-mode` 풀하이트 CSS(사이드바 전용, 팝업 레이아웃 불변). manifest: content_scripts 에 sidebar.js, `web_accessible_resources` 에 popup.html 등록
 - 검증: `node --check`(sidebar.js·popup.js)·manifest JSON OK. **실제 확장 로드 후 F4 토글·팝업 기능(추출/녹화) 동작·페이지 CSP 는 사용자 검증 필요** — 특히 확장 iframe 내 chrome.tabs/scripting 접근이 관건
-- 커밋: (미커밋)
+- 커밋: 1b2b541
 
 ### 2026-09-01 — 네트워크 인지 대기(waitForResponse) — 고정 대기 대체 (A안 1차)
 - 배경: 녹화→Playwright 변환이 순탄치 않은 핵심 원인이 **`waitForTimeout` 고정 대기**(화면별 AJAX 응답시간 편차 → 느리면 실패/빠르면 낭비). 셀렉터(로케이터)는 이미 `collectLocator`로 견고. → 대기를 네트워크 기준으로 전환하는 게 최대 효과라 판단
